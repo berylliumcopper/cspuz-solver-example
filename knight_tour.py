@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.abspath("cspuz"))
 from cspuz import graph, Solver, BoolGridFrame
 from cspuz.graph import Graph
 from cspuz.array import BoolArray2D
-from cspuz.constraints import alldifferent, count_true
+from cspuz.constraints import alldifferent, count_true, cond
 from cspuz.puzzle import util
 from itertools import permutations
 
@@ -145,20 +145,26 @@ class BoolKnightFrame:
 
         return "\n".join(results)
 
+def encode(i, width):
+    return i[0] * width + i[1]
+
 def solve_knight_tour(height, width, start, end, grid, knights):
     solver = Solver()
     n_knights = len(knights)//2 + len(knights)%2
     n_non_knights = len(knights)//2 + 1
     knight_frames = [BoolKnightFrame(solver, height, width) for _ in range(n_knights)]
     non_knight_frames = [BoolGridFrame(solver, height - 1, width - 1) for _ in range(n_non_knights)]
-    passed = solver.int_array((height, width), 0, len(knights) + 1)
+    passed = solver.int_array((height, width), -1, len(knights) + 1)
     solver.add_answer_key(passed)
-    nodes = [start]
-    solver.ensure(passed[start] == 1)
+
+    unordered_nodes = [start] + list(knights) + [end]
+    nodes = solver.int_array((len(knights) + 2), 0, height * width - 1)
+    solver.ensure(alldifferent(nodes))
+    solver.ensure(nodes[0] == encode(start, width))
     for i in range(len(knights)):
-        nodes.append(knights[i])
-        solver.ensure(passed[knights[i]] == i + 1)
-    nodes.append(end)
+        solver.ensure(count_true(nodes == encode(knights[i], width)) == 1)
+    solver.ensure(nodes[len(knights) + 1] == encode(end, width))
+
     solver.ensure(passed[end] == len(knights) + 1)
     solver.add_answer_key(knight_frames)
     solver.add_answer_key(non_knight_frames)
@@ -166,24 +172,28 @@ def solve_knight_tour(height, width, start, end, grid, knights):
         for x in range(width):
             if grid[y][x] == 0:
                 solver.ensure(passed[(y, x)] == 0)
+            elif (y, x) in knights:
+                solver.ensure(passed[(y, x)] == -1)
             else:  
-                solver.ensure(passed[(y, x)] != 0)
+                solver.ensure((passed[(y, x)] != 0) & (passed[(y, x)] != -1))
     for i in range(n_knights):
         path = knight_frames[i].active_edges_single_path()
-        solver.ensure(count_true(knight_frames[i].vertex_neighbors(nodes[2*i + 1])) == 1)
-        solver.ensure(count_true(knight_frames[i].vertex_neighbors(nodes[2*i + 2])) == 1)
+        for s in unordered_nodes:
+            encode_s = encode(s, width)
+            solver.ensure(count_true(knight_frames[i].vertex_neighbors(s)) == ((encode_s == nodes[2*i + 1]) | (encode_s == nodes[2*i + 2])).cond(1, 0))
         for y in range(height):
             for x in range(width):
-                if (y, x) == nodes[2*i + 1] or (y, x) == nodes[2*i + 2]:
+                if (y, x) in unordered_nodes:
                     continue
                 solver.ensure((passed[y, x] == 2*i + 2) == path[y, x])
     for i in range(n_non_knights):
         path = non_knight_frames[i].active_edges_single_path()
-        solver.ensure(count_true(non_knight_frames[i].vertex_neighbors(nodes[2*i])) == 1)
-        solver.ensure(count_true(non_knight_frames[i].vertex_neighbors(nodes[2*i + 1])) == 1)
+        for s in unordered_nodes:
+            encode_s = encode(s, width)
+            solver.ensure(count_true(non_knight_frames[i].vertex_neighbors(s)) == ((encode_s == nodes[2*i]) | (encode_s == nodes[2*i + 1])).cond(1, 0))
         for y in range(height):
             for x in range(width):
-                if (y, x) == nodes[2*i] or (y, x) == nodes[2*i + 1]:
+                if (y, x) in unordered_nodes:
                     continue
                 solver.ensure((passed[y, x] == 2*i + 1) == path[y, x])
     solver.ensure(passed[start] == 1)
@@ -204,17 +214,16 @@ def _main():
             [1, 1, 1, 1, 1, 1],
             [1, 1, 1, 1, 1, 1]]
     knights = [(2, 1), (3, 4), (4, 3), (4, 5)]
-    for i in permutations(knights):
-        is_sat, knight_frames, non_knight_frames, passed = solve_knight_tour(height, width, start, end, grid, i)
-        #print(i, is_sat)
-        if is_sat:
-            print("passed:", i)
-            print(util.stringify_array(passed, str))
-            for j in range(len(non_knight_frames) + len(knight_frames)):
-                if j%2 == 0:
-                    print("non_knight_frames[", j//2, "]: ", non_knight_frames[j//2].stringify_paths_and_loops())
-                else:
-                    print("knight_frames[", j//2, "]: ", knight_frames[j//2].stringify_paths_and_loops())
+    is_sat, knight_frames, non_knight_frames, passed = solve_knight_tour(height, width, start, end, grid, knights)
+    print(is_sat)
+    if is_sat:
+        print("passed:")
+        print(util.stringify_array(passed, lambda x: "K" if x == -1 else "X" if x == 0 else str(x)))
+        for j in range(len(non_knight_frames) + len(knight_frames)):
+            if j%2 == 0:
+                print("non_knight_frames[", j//2, "]: ", non_knight_frames[j//2].stringify_paths_and_loops())
+            else:
+                print("knight_frames[", j//2, "]: ", knight_frames[j//2].stringify_paths_and_loops())
 
 if __name__ == "__main__":
     _main()

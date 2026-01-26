@@ -206,8 +206,9 @@ def _main():
     knights = [(2, 1), (3, 4), (4, 3), (4, 5)]
     for i in permutations(knights):
         is_sat, knight_frames, non_knight_frames, passed = solve_knight_tour(height, width, start, end, grid, i)
-        print(i, is_sat)
+        #print(i, is_sat)
         if is_sat:
+            print("passed:", i)
             print(util.stringify_array(passed, str))
             for j in range(len(non_knight_frames) + len(knight_frames)):
                 if j%2 == 0:

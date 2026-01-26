@@ -1,0 +1,10 @@
+
+[check]
+black
+flake8
+mypy
+pytest
+
+[test]
+pytest
+z3-solver

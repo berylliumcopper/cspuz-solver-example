@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: cspuz
+Version: 0.1.0
+License-File: LICENSE
+Provides-Extra: check
+Requires-Dist: black; extra == "check"
+Requires-Dist: flake8; extra == "check"
+Requires-Dist: mypy; extra == "check"
+Requires-Dist: pytest; extra == "check"
+Provides-Extra: test
+Requires-Dist: pytest; extra == "test"
+Requires-Dist: z3-solver; extra == "test"
+Dynamic: license-file

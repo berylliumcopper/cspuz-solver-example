@@ -148,6 +148,13 @@ class BoolKnightFrame:
 def encode(i, width):
     return i[0] * width + i[1]
 
+'''
+knight_tour rule:
+The path passes through each unshaded cell (marked with '1' in grid) exactly once, and does not pass through any shaded cell (marked with '0' in grid).
+At each knight cell, the path switches from orthogonal move to knight move (two steps in one direction and one step in the other direction) or vice versa.
+The path starts at the start cell and ends at the end cell.
+'''
+
 def solve_knight_tour(height, width, start, end, grid, knights):
     solver = Solver()
     n_knights = len(knights)//2 + len(knights)%2
@@ -218,7 +225,7 @@ def _main():
     print(is_sat)
     if is_sat:
         print("passed:")
-        print(util.stringify_array(passed, lambda x: "K" if x == -1 else "X" if x == 0 else str(x)))
+        print(util.stringify_array(passed, lambda x: "K" if x == -1 else "O" if x == 0 else "?" if x == None else str(x)))
         for j in range(len(non_knight_frames) + len(knight_frames)):
             if j%2 == 0:
                 print("non_knight_frames[", j//2, "]: ", non_knight_frames[j//2].stringify_paths_and_loops())

@@ -28,7 +28,7 @@ from cspuz.array import (
 from cspuz.expr import BoolExpr, IntExpr, Expr, Op, BoolExprLike, IntExprLike
 from cspuz.graph import Graph, active_vertices_connected as _active_vertices_connected
 from cspuz.solver import Solver
-from cspuz import graph
+from cspuz import graph, count_true
 from cspuz.puzzle import util
 
 T = TypeVar("T", bound=Expr)
@@ -403,7 +403,7 @@ the black tiles cannot be adjacent in surfaces
 '''
 
 '''
-rules: 
+specific rules for kurodoko: 
 the tiles with nonzero numbers in grid must be white (True)
 the tiles with zero numbers in grid must be black (False)
 the nonzero numbers in grid must be the number of white tiles seen from the tile in direction of plus and minus x, y, z axes (including the tile itself)
@@ -488,15 +488,66 @@ def solve_kurodoko(depth, height, width, grid):
     is_sat = solver.solve()
     return is_sat, is_white
 
+'''
+specific rules for hitori: 
+the white tiles on the same line (x, y, z axes) must have numbers in grid must be different from each other
+'''
+def solve_hitori(depth, height, width, grid):
+    solver = Solver()
+    is_white = BoolArray3D(solver, (depth, height, width))
+    solver.add_answer_key(is_white)
+
+    active_vertices_connected(solver, is_white)
+    
+    solver.ensure(is_white[1:, :, :] | is_white[:-1, :, :])
+    solver.ensure(is_white[:, 1:, :] | is_white[:, :-1, :])
+    solver.ensure(is_white[:, :, 1:] | is_white[:, :, :-1])
+
+    for z in range(depth):
+        for y in range(height):
+            number_list = [grid[z][y][x] for x in range(width)]
+            numbers = {_ for _ in number_list if number_list.count(_) > 1}
+            for n in numbers:
+                solver.ensure(count_true([is_white[z][y][x] & (grid[z][y][x] == n) for x in range(width)]) <= 1)
+    
+    for z in range(depth):
+        for x in range(width):
+            number_list = [grid[z][y][x] for y in range(height)]
+            numbers = {_ for _ in number_list if number_list.count(_) > 1}
+            for n in numbers: # type: ignore
+                solver.ensure(count_true([is_white[z][y][x] & (grid[z][y][x] == n) for y in range(height)]) <= 1)
+    
+    for y in range(height):
+        for x in range(width):
+            number_list = [grid[z][y][x] for z in range(depth)]
+            numbers = {_ for _ in number_list if number_list.count(_) > 1}
+            for n in numbers:
+                solver.ensure(count_true([is_white[z][y][x] & (grid[z][y][x] == n) for z in range(depth)]) <= 1)
+
+    is_sat = solver.solve()
+    return is_sat, is_white
+
 def _main():
+
     depth, height, width = 5, 5, 5
-    grid = [[[0, 0, 0, 0, 0], [2, 0, 0, 0, 2], [0, 3, 0, 3, 0], [0, 0, 0, 0, 0], [0,  0, 2, 0, 0]],
+    grid = [[[0, 0, 0, 0, 0], [2, 0, 0, 0, 2], [0, 3, 0, 3, 0], [0, 0, 0, 0, 0], [0, 0, 2, 0, 0]],
     [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]],
     [[0, 0, 0, 0, 0], [0, 0, 3, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]],
     [[3, 0, 0, 0, 3], [0, 0, 0, 0, 0], [2, 0, 0, 0, 0], [0, 0, 0, 0, 0], [2, 0, 0, 0, 3]],
     [[0, 0, 0, 0, 0], [0, 0, 0, 3, 0], [0, 0, 0, 0, 0], [0, 0, 0, 3, 0], [0, 0, 0, 0, 0]]]
     is_sat, is_white = solve_kurodoko(depth, height, width, grid)
     print("kurodoko:", is_sat)
+    if is_sat:
+        print(stringify_array_3d(is_white, lambda x: "." if x else "?" if x is None else "B"))
+    
+    depth, height, width = 5, 5, 5
+    grid = [[[0, 1, 3, 0, 4], [5, 2, 3, 8, 5], [2, 6, 4, 5, 4], [3, 4, 6, 6, 8], [4, 4, 6, 7, 9]],
+    [[9, 2, 3, 4, 5], [2, 9, 4, 9, 9], [4, 1, 8, 3, 7], [4, 5, 6, 7, 8], [8, 6, 4, 8, 9]],
+    [[2, 3, 4, 5, 1], [3, 1, 5, 7, 7], [4, 5, 6, 2, 7], [4, 6, 9, 8, 9], [3, 7, 7, 9, 0]],
+    [[4, 4, 5, 6, 5], [4, 5, 6, 7, 8], [2, 6, 6, 8, 4], [6, 6, 8, 1, 7], [7, 8, 9, 1, 5]],
+    [[4, 5, 3, 7, 8], [5, 7, 7, 8, 9], [6, 2, 8, 9, 6], [0, 8, 8, 0, 7], [8, 0, 0, 1, 1]]]
+    is_sat, is_white = solve_hitori(depth, height, width, grid)
+    print("hitori:", is_sat)
     if is_sat:
         print(stringify_array_3d(is_white, lambda x: "." if x else "?" if x is None else "B"))
 

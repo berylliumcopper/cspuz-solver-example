@@ -571,6 +571,154 @@ def solve_kurochute(depth, height, width, grid):
 
     is_sat = solver.solve()
     return is_sat, is_white
+
+'''
+specific rules for yajisan-kazusan:
+the white colored clues (nonzero numbers) represent the number of black tiles seen from the tile in the specific direction
+the black colored clues (nonzero numbers) does not have any information
+'''
+def solve_yajisan(depth, height, width, grid):
+    solver = Solver()
+    is_white = BoolArray3D(solver, (depth, height, width))
+    solver.add_answer_key(is_white)
+    
+    active_vertices_connected(solver, is_white)
+
+    solver.ensure(is_white[1:, :, :] | is_white[:-1, :, :])
+    solver.ensure(is_white[:, 1:, :] | is_white[:, :-1, :])
+    solver.ensure(is_white[:, :, 1:] | is_white[:, :, :-1])
+
+    to_left = IntArray3D(solver, (depth, height, width), 0, width)
+    for z in range(depth):
+        for y in range(height):
+            for x in range(width):
+                if x > 0:
+                    solver.ensure(to_left[z][y][x] == to_left[z][y][x - 1] + (is_white[z][y][x]).cond(0, 1))
+                else:
+                    solver.ensure(to_left[z][y][x] == (is_white[z][y][x]).cond(0, 1))
+
+    to_right = IntArray3D(solver, (depth, height, width), 0, width)
+    for z in range(depth):
+        for y in range(height):
+            for x in range(width):
+                if x < width - 1:
+                    solver.ensure(to_right[z][y][x] == to_right[z][y][x + 1] + (is_white[z][y][x]).cond(0, 1))
+                else:
+                    solver.ensure(to_right[z][y][x] == (is_white[z][y][x]).cond(0, 1))
+
+    to_up = IntArray3D(solver, (depth, height, width), 0, height)
+    for z in range(depth):
+        for y in range(height):
+            for x in range(width):
+                if y > 0:
+                    solver.ensure(to_up[z][y][x] == to_up[z][y - 1][x] + (is_white[z][y][x]).cond(0, 1))
+                else:
+                    solver.ensure(to_up[z][y][x] == (is_white[z][y][x]).cond(0, 1))
+
+    to_down = IntArray3D(solver, (depth, height, width), 0, height)
+    for z in range(depth):
+        for y in range(height):
+            for x in range(width):
+                if y < height - 1:
+                    solver.ensure(to_down[z][y][x] == to_down[z][y + 1][x] + (is_white[z][y][x]).cond(0, 1))
+                else:
+                    solver.ensure(to_down[z][y][x] == (is_white[z][y][x]).cond(0, 1))
+
+    to_front = IntArray3D(solver, (depth, height, width), 0, depth)
+    for z in range(depth):
+        for y in range(height):
+            for x in range(width):
+                if z > 0:
+                    solver.ensure(to_front[z][y][x] == to_front[z - 1][y][x] + (is_white[z][y][x]).cond(0, 1))
+                else:
+                    solver.ensure(to_front[z][y][x] == (is_white[z][y][x]).cond(0, 1))
+
+    to_back = IntArray3D(solver, (depth, height, width), 0, depth)
+    for z in range(depth):
+        for y in range(height):
+            for x in range(width):
+                if z < depth - 1:
+                    solver.ensure(to_back[z][y][x] == to_back[z + 1][y][x] + (is_white[z][y][x]).cond(0, 1))
+                else:
+                    solver.ensure(to_back[z][y][x] == (is_white[z][y][x]).cond(0, 1))
+    
+
+    for z in range(depth):
+        for y in range(height):
+            for x in range(width):
+                if grid[z][y][x] != 0:
+                    if grid[z][y][x][1] == 0:
+                        solver.ensure((~is_white[z][y][x]) | (to_left[z][y][x] == grid[z][y][x][0]))
+                    elif grid[z][y][x][1] == 1:
+                        solver.ensure((~is_white[z][y][x]) | (to_right[z][y][x] == grid[z][y][x][0]))
+                    elif grid[z][y][x][1] == 2:
+                        solver.ensure((~is_white[z][y][x]) | (to_up[z][y][x] == grid[z][y][x][0]))
+                    elif grid[z][y][x][1] == 3:
+                        solver.ensure((~is_white[z][y][x]) | (to_down[z][y][x] == grid[z][y][x][0]))
+                    elif grid[z][y][x][1] == 4:
+                        solver.ensure((~is_white[z][y][x]) | (to_front[z][y][x] == grid[z][y][x][0]))
+                    elif grid[z][y][x][1] == 5:
+                        solver.ensure((~is_white[z][y][x]) | (to_back[z][y][x] == grid[z][y][x][0]))
+
+    is_sat = solver.solve()
+    return is_sat, is_white
+
+'''
+specific rules for context:
+the black clues (nonnegative numbers) represent the number of black tiles that has a common node but no common edge or surface with the tile with the clue
+the white clues (nonnegative numbers) represent the number of black tiles that has a common surface with the tile with the clue
+'''
+def solve_context(depth, height, width, grid):
+    solver = Solver()
+    is_white = BoolArray3D(solver, (depth, height, width))
+    solver.add_answer_key(is_white)
+
+    active_vertices_connected(solver, is_white)
+
+    solver.ensure(is_white[1:, :, :] | is_white[:-1, :, :])
+    solver.ensure(is_white[:, 1:, :] | is_white[:, :-1, :])
+    solver.ensure(is_white[:, :, 1:] | is_white[:, :, :-1])
+
+    for z in range(depth):
+        for y in range(height):
+            for x in range(width):
+                if grid[z][y][x] != -1:
+                    tiles_diag = []
+                    if x > 0 and y > 0 and z > 0:
+                        tiles_diag.append(~is_white[z - 1][y - 1][x - 1])
+                    if x > 0 and y > 0 and z < depth - 1:
+                        tiles_diag.append(~is_white[z + 1][y - 1][x - 1])
+                    if x > 0 and y < height - 1 and z > 0:
+                        tiles_diag.append(~is_white[z - 1][y + 1][x - 1])
+                    if x > 0 and y < height - 1 and z < depth - 1:
+                        tiles_diag.append(~is_white[z + 1][y + 1][x - 1])
+                    if x < width - 1 and y > 0 and z > 0:
+                        tiles_diag.append(~is_white[z - 1][y - 1][x + 1])
+                    if x < width - 1 and y > 0 and z < depth - 1:
+                        tiles_diag.append(~is_white[z + 1][y - 1][x + 1])
+                    if x < width - 1 and y < height - 1 and z > 0:
+                        tiles_diag.append(~is_white[z - 1][y + 1][x + 1])
+                    if x < width - 1 and y < height - 1 and z < depth - 1:
+                        tiles_diag.append(~is_white[z + 1][y + 1][x + 1])
+                    tiles_surface = []
+                    if x > 0:
+                        tiles_surface.append(~is_white[z][y][x - 1])
+                    if x < width - 1:
+                        tiles_surface.append(~is_white[z][y][x + 1])
+                    if y > 0:
+                        tiles_surface.append(~is_white[z][y - 1][x])
+                    if y < height - 1:
+                        tiles_surface.append(~is_white[z][y + 1][x])
+                    if z > 0:
+                        tiles_surface.append(~is_white[z - 1][y][x])
+                    if z < depth - 1:
+                        tiles_surface.append(~is_white[z + 1][y][x])
+                    solver.ensure(((~is_white[z][y][x]) & (count_true(tiles_diag) == grid[z][y][x])) | ((is_white[z][y][x]) & (count_true(tiles_surface) == grid[z][y][x])))
+
+    is_sat = solver.solve()
+    return is_sat, is_white
+
+
 def _main():
 
     depth, height, width = 5, 5, 5
@@ -603,6 +751,28 @@ def _main():
     [[0, 0, 0, 0, 2], [0, 1, 0, 0, 3], [2, 0, 1, 1, 0], [0, 0, 3, 0, 0], [0, 0, 2, 0, 0]]]
     is_sat, is_white = solve_kurochute(depth, height, width, grid)
     print("kurochute:", is_sat)
+    if is_sat:
+        print(stringify_array_3d(is_white, lambda x: "." if x else "?" if x is None else "B"))
+    
+    depth, height, width = 5, 5, 5
+    grid = [[[0, (0, 1), 0, 0, (2, 3)], [0, 0, 0, 0, 0], [(1, 2), 0, 0, 0, 0], [(1, 3), 0, 0, 0, (2, 0)], [(1, 2), 0, 0, (2, 2), 0]],
+    [[0, (1, 1), 0, 0, 0], [(0, 1), 0, 0, 0, 0], [0, 0, 0, (1, 2), (1, 2)], [(2, 2), (0, 0), 0, 0, 0], [0, 0, (1, 0), 0, (1, 5)]],
+    [[0, 0, 0, 0, 0], [(1, 5), (0, 1), 0, 0, 0], [0, 0, 0, (1, 0), 0], [0, 0, 0, 0, (2, 0)], [0, 0, 0, (0, 4), (2, 0)]],
+    [[0, 0, 0, 0, (1, 0)], [0, (0, 0), (1, 4), 0, 0], [(1, 1), 0, 0, 0, 0], [0, (1, 5), 0, (2, 0), (1, 5)], [(1, 5), (2, 4), 0, 0, 0]],
+    [[0, (1, 4), 0, 0, 0], [0, (1, 2), 0, 0, (1, 4)], [0, 0, 0, 0, (0, 2)], [(1, 2), 0, (1, 1), 0, 0], [0, (1, 4), (2, 2), 0, (2, 2)]]]
+    is_sat, is_white = solve_yajisan(depth, height, width, grid)
+    print("yajisan:", is_sat)
+    if is_sat:
+        print(stringify_array_3d(is_white, lambda x: "." if x else "?" if x is None else "B"))
+
+    depth, height, width = 5, 5, 5
+    grid = [[[-1, 2, -1, 1, -1], [-1, -1, -1, -1, 2], [-1, 1, -1, -1, -1], [2, -1, -1, -1, 0], [-1, -1, 2, -1, -1]],
+    [[-1, -1, -1, -1, -1], [-1, -1, -1, -1, -1], [-1, -1, -1, 4, -1], [-1, -1, -1, -1, -1], [2, -1, -1, -1, -1]],
+    [[-1, -1, -1, -1, -1], [-1, -1, -1, -1, 0], [-1, -1, -1, -1, -1], [-1, -1, -1, -1, -1], [-1, -1, 3, -1, 2]], 
+    [[-1, -1, -1, -1, -1], [-1, -1, -1, -1, 1], [-1, 7, -1, 2, -1], [3, -1, -1, -1, -1], [-1, -1, -1, 3, -1]],
+    [[-1, -1, -1, -1, -1], [-1, -1, 2, 3, -1], [-1, -1, -1, -1, 0], [-1, -1, 0, -1, -1], [-1, -1, -1, -1, 1]]]
+    is_sat, is_white = solve_context(depth, height, width, grid)
+    print("context:", is_sat)
     if is_sat:
         print(stringify_array_3d(is_white, lambda x: "." if x else "?" if x is None else "B"))
 

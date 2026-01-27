@@ -16,11 +16,10 @@ The /cspuz folder contains a slightly modified version of the cspuz library (jus
 - `unbengable_loop.py`：蚌埠回旋-CCBC15 https://archive.cipherpuzzles.com/index.html#/problem?c=ccbc15/problems/5/42
 - `samsung_galaxy.py`：三星Galaxy-CCBC16
 - `star_and_sudoku.py`：群星与银河-ZJUPH（只实现了第一部分：星星+杀手框数独） https://2025.zjuph.fun/puzzle/body/qun-xing-yu-yin-he
-- `three_dimensional_country.py`：三维国-CCBC1314（1-3部分） https://archive.cipherpuzzles.com/index.html#/problem?c=ccbc13/problems/CCBC-14/23
+- `three_dimensional_country.py`：三维国-CCBC1314（共5道小题） https://archive.cipherpuzzles.com/index.html#/problem?c=ccbc13/problems/CCBC-14/23
 - `knight_tour.py`：Rorschachs River规则23（其中的例子是原题的6*6 example，主要用于测试对于非相邻相连网格的处理，和网格相连规则在路径中切换的处理） https://brokensign.com/puzzle/2025/12/31/rorschachs-river.html
 - `simplepath_order.py`：Rorschachs River规则1（其中的例子是原题的6*6 example，主要用于测试按照网格经过顺序给经过格标号的处理） https://brokensign.com/puzzle/2025/12/31/rorschachs-river.html
 
 计划实现：
 
 - 这迷宫让人烦得只想躺平-P&KU2 https://pnku2.pkupuzzle.art/#/game/miyue/summer_06
-- 三维国-CCBC1314（4-5部分） https://archive.cipherpuzzles.com/index.html#/problem?c=ccbc13/problems/CCBC-14/23

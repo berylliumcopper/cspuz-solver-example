@@ -490,7 +490,7 @@ def solve_kurodoko(depth, height, width, grid):
 
 '''
 specific rules for hitori: 
-the white tiles on the same line (x, y, z axes) must have numbers in grid must be different from each other
+the white tiles on the same line (x, y, z axes) must have different numbers in grid
 '''
 def solve_hitori(depth, height, width, grid):
     solver = Solver()
@@ -514,7 +514,7 @@ def solve_hitori(depth, height, width, grid):
         for x in range(width):
             number_list = [grid[z][y][x] for y in range(height)]
             numbers = {_ for _ in number_list if number_list.count(_) > 1}
-            for n in numbers: # type: ignore
+            for n in numbers:
                 solver.ensure(count_true([is_white[z][y][x] & (grid[z][y][x] == n) for y in range(height)]) <= 1)
     
     for y in range(height):
@@ -527,6 +527,50 @@ def solve_hitori(depth, height, width, grid):
     is_sat = solver.solve()
     return is_sat, is_white
 
+'''
+specific rules for kurochute: 
+the tiles with nonzero numbers in grid must be white (True)
+for each tile with nonzero number in grid, there must exist and only exist one black tile which is in the same line (x, y, z axes) with the tile and has the distance from the tile equal to the number
+'''
+def solve_kurochute(depth, height, width, grid):
+    solver = Solver()
+    is_white = BoolArray3D(solver, (depth, height, width))
+    solver.add_answer_key(is_white)
+    
+    active_vertices_connected(solver, is_white)
+
+    for z in range(depth):
+        for y in range(height):
+            for x in range(width):
+                if grid[z][y][x] != 0:
+                    solver.ensure(is_white[z][y][x])
+    
+    solver.ensure(is_white[1:, :, :] | is_white[:-1, :, :])
+    solver.ensure(is_white[:, 1:, :] | is_white[:, :-1, :])
+    solver.ensure(is_white[:, :, 1:] | is_white[:, :, :-1])
+
+    for z in range(depth):
+        for y in range(height):
+            for x in range(width):
+                if grid[z][y][x] != 0:
+                    ds = grid[z][y][x]
+                    tiles = []
+                    if x - ds >= 0:
+                        tiles.append(~is_white[z][y][x - ds])
+                    if x + ds < width:
+                        tiles.append(~is_white[z][y][x + ds])
+                    if y - ds >= 0:
+                        tiles.append(~is_white[z][y - ds][x])
+                    if y + ds < height:
+                        tiles.append(~is_white[z][y + ds][x])
+                    if z - ds >= 0:
+                        tiles.append(~is_white[z - ds][y][x])
+                    if z + ds < depth:
+                        tiles.append(~is_white[z + ds][y][x])
+                    solver.ensure(count_true(tiles) == 1)
+
+    is_sat = solver.solve()
+    return is_sat, is_white
 def _main():
 
     depth, height, width = 5, 5, 5
@@ -548,6 +592,17 @@ def _main():
     [[4, 5, 3, 7, 8], [5, 7, 7, 8, 9], [6, 2, 8, 9, 6], [0, 8, 8, 0, 7], [8, 0, 0, 1, 1]]]
     is_sat, is_white = solve_hitori(depth, height, width, grid)
     print("hitori:", is_sat)
+    if is_sat:
+        print(stringify_array_3d(is_white, lambda x: "." if x else "?" if x is None else "B"))
+    
+    depth, height, width = 5, 5, 5
+    grid = [[[0, 0, 2, 0, 0], [0, 0, 0, 0, 0], [0, 1, 0, 0, 3], [0, 0, 0, 2, 0], [2, 0, 1, 0, 0]],
+    [[0, 0, 2, 2, 0], [2, 0, 1, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 3], [0, 0, 1, 1, 0]],
+    [[0, 3, 1, 0, 0], [0, 0, 0, 0, 0], [1, 0, 0, 0, 2], [0, 0, 0, 0, 2], [0, 0, 0, 0, 0]],
+    [[1, 0, 2, 3, 0], [3, 0, 0, 3, 3], [0, 0, 1, 3, 0], [0, 0, 0, 0, 0], [0, 0, 1, 2, 0]],
+    [[0, 0, 0, 0, 2], [0, 1, 0, 0, 3], [2, 0, 1, 1, 0], [0, 0, 3, 0, 0], [0, 0, 2, 0, 0]]]
+    is_sat, is_white = solve_kurochute(depth, height, width, grid)
+    print("kurochute:", is_sat)
     if is_sat:
         print(stringify_array_3d(is_white, lambda x: "." if x else "?" if x is None else "B"))
 

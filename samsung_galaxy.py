@@ -70,7 +70,7 @@ def _main():
     is_sat, answer, edge = solve_samsung_galaxy(15, 3, regions, centers)
     print(is_sat)
     if is_sat:
-        print(util.stringify_array(answer, str))
+        print(util.stringify_array(answer, lambda x: '??' if x == None else str(x).zfill(2)))
         print(util.stringify_grid_frame(edge).replace('-', 'f').replace('|', '-').replace('f', '|').replace('x', ' '))
 
 if __name__ == "__main__":

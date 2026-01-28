@@ -1,6 +1,7 @@
 from cspuz import graph, Solver, count_true, BoolGridFrame
 from cspuz.puzzle import util as puz_util
-from util import get_direction_order
+from util import get_direction_order, get_pathlength
+from cspuz.constraints import fold_or
 
 def solve_maze1(height, width, blocks, walls_h, walls_v, numbers, start, end):
     solver = Solver()
@@ -57,6 +58,64 @@ def _main1():
         print(puz_util.stringify_array(order_array, lambda x: "XXX" if x == -1 else "???" if x == None else str(x).zfill(3)))
 
 
+def solve_maze2(height, width, blocks, walls_h, walls_v, reds, whites, start, end):
+    solver = Solver()
+    grid = BoolGridFrame(solver, height - 1, width - 1)
+    solver.add_answer_key(grid)
+    is_passed = graph.active_edges_single_path(solver, grid)
+    for y, x in blocks:
+        solver.ensure(~is_passed[y, x])
+    for y, x in walls_h:
+        solver.ensure(~grid.horizontal[y, x])
+    for y, x in walls_v:
+        solver.ensure(~grid.vertical[y, x])
+    solver.ensure(count_true(grid.vertex_neighbors(start)) == 1)
+    solver.ensure(count_true(grid.vertex_neighbors(end)) == 1)
+    
+    to_up, to_down, to_left, to_right = get_pathlength(solver, grid, height, width)
+    grid_rd, grid_lu, order_array = get_direction_order(solver, grid, is_passed, height, width, start, end)
+
+    for y, x in reds:
+        solver.ensure(is_passed[y, x])
+        conditions = []
+        if x > 0 and y > 0:
+            conditions.append((grid_rd.vertical[y-1,x]) & (grid_lu.horizontal[y,x-1]) & (to_up[y,x] + 2 == to_left[y,x]))
+            conditions.append((grid_lu.vertical[y-1,x]) & (grid_rd.horizontal[y,x-1]) & (to_up[y,x] == to_left[y,x] + 2))
+        if x < width - 1 and y > 0:
+            conditions.append((grid_rd.vertical[y-1,x]) & (grid_rd.horizontal[y,x]) & (to_up[y,x] + 2 == to_right[y,x]))
+            conditions.append((grid_lu.vertical[y-1,x]) & (grid_lu.horizontal[y,x]) & (to_up[y,x] == to_right[y,x] + 2))
+        if x > 0 and y < height - 1:
+            conditions.append((grid_lu.vertical[y,x]) & (grid_lu.horizontal[y,x-1]) & (to_down[y,x] + 2 == to_left[y,x]))
+            conditions.append((grid_rd.vertical[y,x]) & (grid_rd.horizontal[y,x-1]) & (to_down[y,x] == to_left[y,x] + 2))
+        if x < width - 1 and y < height - 1:
+            conditions.append((grid_lu.vertical[y,x]) & (grid_rd.horizontal[y,x]) & (to_down[y,x] + 2 == to_right[y,x]))
+            conditions.append((grid_rd.vertical[y,x]) & (grid_lu.horizontal[y,x]) & (to_down[y,x] == to_right[y,x] + 2))
+        solver.ensure(fold_or(conditions))
+    for y, x in whites:
+        solver.ensure(is_passed[y, x])
+        solver.ensure(to_up[y, x] == to_down[y, x])
+        solver.ensure(to_left[y, x] == to_right[y, x])
+
+    is_sat = solver.solve()
+    return is_sat, grid, order_array
+
+def _main2():
+    height = 14
+    width = 14
+    blocks = [(1, 0), (9, 10), (11, 0), (0, 3), (7, 9), (13, 0)]
+    walls_h = [(4, 5), (4, 11), (7, 3), (7, 4), (7, 5), (8, 4), (9, 11), (10, 0), (10, 6), (10, 11), (11, 8), (12, 6)]
+    walls_v = [(0, 6), (1, 11), (2, 3), (2, 4), (4, 3), (4, 4), (5, 8), (5, 12), (7, 4), (8, 4), (10, 7), (11, 2), (11, 3), (11, 4), (11, 6), (11, 8), (12, 3)]
+    reds = [(2, 5), (2, 7), (4, 5), (4, 7), (4, 11), (7, 2), (10, 6), (13, 1)]
+    whites = [(1, 2), (2, 12), (2, 13), (5, 0), (5, 1), (5, 2), (8, 13), (10, 10), (10, 12), (11, 10), (12, 12)]
+    start = (2, 11)
+    end = (11, 2)
+    is_sat, grid, order_array = solve_maze2(height, width, blocks, walls_h, walls_v, reds, whites, start, end)
+    print("maze 2:", is_sat)
+    if is_sat:
+        print("grid:")
+        print(puz_util.stringify_grid_frame(grid))
+        print("order_array:")
+        print(puz_util.stringify_array(order_array, lambda x: "XXX" if x == -1 else "???" if x == None else str(x).zfill(3)))
 
 if __name__ == "__main__":
-    _main1()
+    _main2()

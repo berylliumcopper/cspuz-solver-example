@@ -7,6 +7,30 @@ from cspuz.puzzle import util
 def sum_neighbors(grid_frame, index_array, height, width, y, x):
     return (0 if y == 0 else (grid_frame.vertical[y-1, x]).cond(index_array[y - 1, x], 0)) + (0 if y == height - 1 else (grid_frame.vertical[y, x]).cond(index_array[y + 1, x], 0)) + (0 if x == 0 else (grid_frame.horizontal[y, x-1]).cond(index_array[y, x - 1], 0)) + (0 if x == width - 1 else (grid_frame.horizontal[y, x]).cond(index_array[y, x + 1], 0))
 
+def direction(solver,grid, is_passed, height, width, start, end):
+    grid_rd = BoolGridFrame(solver, height - 1, width - 1)
+    grid_lu = BoolGridFrame(solver, height - 1, width - 1)
+    solver.ensure(((~grid.horizontal[:,:]) & (~grid_rd.horizontal[:,:]) & (~grid_lu.horizontal[:,:])) | ((grid.horizontal[:,:]) & (grid_rd.horizontal[:,:]) & (~grid_lu.horizontal[:,:])) | ((grid.horizontal[:,:]) & (~grid_rd.horizontal[:,:]) & (grid_lu.horizontal[:,:])))
+    solver.ensure(((~grid.vertical[:,:]) & (~grid_rd.vertical[:,:]) & (~grid_lu.vertical[:,:])) | ((grid.vertical[:,:]) & (grid_rd.vertical[:,:]) & (~grid_lu.vertical[:,:])) | ((grid.vertical[:,:]) & (~grid_rd.vertical[:,:]) & (grid_lu.vertical[:,:])))
+    
+    for y in range(height):
+        for x in range(width):
+            if (y, x) != end:
+                neighbors = []
+                if y > 0:
+                    neighbors.append(grid_lu.vertical[y - 1, x])
+                if y < height - 1:
+                    neighbors.append(grid_rd.vertical[y, x])
+                if x > 0:
+                    neighbors.append(grid_lu.horizontal[y, x - 1])
+                if x < width - 1:
+                    neighbors.append(grid_rd.horizontal[y, x])
+                solver.ensure(count_true(neighbors) == is_passed[y, x].cond(1, 0))
+    
+    return grid_rd, grid_lu
+
+
+
 def solve_maze1(height, width, blocks, walls_h, walls_v, numbers, start, end):
     solver = Solver()
     grid = BoolGridFrame(solver, height - 1, width - 1)
@@ -42,6 +66,26 @@ def solve_maze1(height, width, blocks, walls_h, walls_v, numbers, start, end):
 
     order_array = solver.int_array((height, width), -1, height * width - 1)
     solver.add_answer_key(order_array)
+
+    grid_rd, grid_lu = direction(solver, grid, is_passed, height, width, start, end)
+
+    for y in range(height):
+        for x in range(width):
+            if (y, x) == start:
+                solver.ensure(order_array[y, x] == 0)
+            elif (y, x) != end:
+                solver.ensure(-1 == is_passed[y, x].cond(-1, order_array[y, x]))
+    
+    for y in range(height - 1):
+        for x in range(width):
+            solver.ensure(1 == grid_rd.vertical[y, x].cond(order_array[y + 1, x] - order_array[y, x], 1))
+            solver.ensure(1 == grid_lu.vertical[y, x].cond(order_array[y, x] - order_array[y + 1, x], 1))
+    
+    for y in range(height):
+        for x in range(width - 1):
+            solver.ensure(1 == grid_rd.horizontal[y, x].cond(order_array[y, x + 1] - order_array[y, x], 1))
+            solver.ensure(1 == grid_lu.horizontal[y, x].cond(order_array[y, x] - order_array[y, x + 1], 1))
+    '''
     for y in range(height):
         for x in range(width):
             if (y, x) == start:
@@ -58,7 +102,7 @@ def solve_maze1(height, width, blocks, walls_h, walls_v, numbers, start, end):
         solver.ensure(order_array[start[0]+1, start[1]] <= grid.vertical[start[0], start[1]].cond(1, height*width - 1))
     if start[1] != width - 1:
         solver.ensure(order_array[start[0], start[1]+1] <= grid.horizontal[start[0], start[1]].cond(1, height*width - 1))
-
+    '''
     is_sat = solver.solve()
     return is_sat, grid, order_array
 

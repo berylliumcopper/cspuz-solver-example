@@ -85,24 +85,7 @@ def solve_maze1(height, width, blocks, walls_h, walls_v, numbers, start, end):
         for x in range(width - 1):
             solver.ensure(1 == grid_rd.horizontal[y, x].cond(order_array[y, x + 1] - order_array[y, x], 1))
             solver.ensure(1 == grid_lu.horizontal[y, x].cond(order_array[y, x] - order_array[y, x + 1], 1))
-    '''
-    for y in range(height):
-        for x in range(width):
-            if (y, x) == start:
-                solver.ensure(order_array[y, x] == 0)
-            elif (y, x) != end:
-                solver.ensure(order_array[y, x] + order_array[y, x] == is_passed[y, x].cond(sum_neighbors(grid, order_array, height, width, y, x), -2))
-                solver.ensure(order_array[y, x] >= is_passed[y, x].cond(1, -2))
     
-    if start[0] != 0:
-        solver.ensure(order_array[start[0]-1, start[1]] <= grid.vertical[start[0]-1, start[1]].cond(1, height*width - 1))
-    if start[1] != 0:
-        solver.ensure(order_array[start[0], start[1]-1] <= grid.horizontal[start[0], start[1]-1].cond(1, height*width - 1))
-    if start[0] != height - 1:
-        solver.ensure(order_array[start[0]+1, start[1]] <= grid.vertical[start[0], start[1]].cond(1, height*width - 1))
-    if start[1] != width - 1:
-        solver.ensure(order_array[start[0], start[1]+1] <= grid.horizontal[start[0], start[1]].cond(1, height*width - 1))
-    '''
     is_sat = solver.solve()
     return is_sat, grid, order_array
 

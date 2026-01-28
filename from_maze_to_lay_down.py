@@ -74,17 +74,17 @@ def solve_maze1(height, width, blocks, walls_h, walls_v, numbers, start, end):
             if (y, x) == start:
                 solver.ensure(order_array[y, x] == 0)
             elif (y, x) != end:
-                solver.ensure(-1 == is_passed[y, x].cond(-1, order_array[y, x]))
+                solver.ensure((~is_passed[y, x]).then(order_array[y, x] == -1))
     
     for y in range(height - 1):
         for x in range(width):
-            solver.ensure(1 == grid_rd.vertical[y, x].cond(order_array[y + 1, x] - order_array[y, x], 1))
-            solver.ensure(1 == grid_lu.vertical[y, x].cond(order_array[y, x] - order_array[y + 1, x], 1))
+            solver.ensure(grid_rd.vertical[y, x].then(order_array[y + 1, x] - order_array[y, x] == 1))
+            solver.ensure(grid_lu.vertical[y, x].then(order_array[y, x] - order_array[y + 1, x] == 1))
     
     for y in range(height):
         for x in range(width - 1):
-            solver.ensure(1 == grid_rd.horizontal[y, x].cond(order_array[y, x + 1] - order_array[y, x], 1))
-            solver.ensure(1 == grid_lu.horizontal[y, x].cond(order_array[y, x] - order_array[y, x + 1], 1))
+            solver.ensure(grid_rd.horizontal[y, x].then(order_array[y, x + 1] - order_array[y, x] == 1))
+            solver.ensure(grid_lu.horizontal[y, x].then(order_array[y, x] - order_array[y, x + 1] == 1))
     
     is_sat = solver.solve()
     return is_sat, grid, order_array

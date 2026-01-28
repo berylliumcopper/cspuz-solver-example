@@ -1,35 +1,6 @@
-from cspuz.expr import BoolExpr, IntExpr, Expr
-from cspuz.graph import Graph, active_edges_single_path
-from cspuz.solver import Solver
-from cspuz import graph, count_true, BoolGridFrame
-from cspuz.puzzle import util
-
-def sum_neighbors(grid_frame, index_array, height, width, y, x):
-    return (0 if y == 0 else (grid_frame.vertical[y-1, x]).cond(index_array[y - 1, x], 0)) + (0 if y == height - 1 else (grid_frame.vertical[y, x]).cond(index_array[y + 1, x], 0)) + (0 if x == 0 else (grid_frame.horizontal[y, x-1]).cond(index_array[y, x - 1], 0)) + (0 if x == width - 1 else (grid_frame.horizontal[y, x]).cond(index_array[y, x + 1], 0))
-
-def direction(solver,grid, is_passed, height, width, start, end):
-    grid_rd = BoolGridFrame(solver, height - 1, width - 1)
-    grid_lu = BoolGridFrame(solver, height - 1, width - 1)
-    solver.ensure(((~grid.horizontal[:,:]) & (~grid_rd.horizontal[:,:]) & (~grid_lu.horizontal[:,:])) | ((grid.horizontal[:,:]) & (grid_rd.horizontal[:,:]) & (~grid_lu.horizontal[:,:])) | ((grid.horizontal[:,:]) & (~grid_rd.horizontal[:,:]) & (grid_lu.horizontal[:,:])))
-    solver.ensure(((~grid.vertical[:,:]) & (~grid_rd.vertical[:,:]) & (~grid_lu.vertical[:,:])) | ((grid.vertical[:,:]) & (grid_rd.vertical[:,:]) & (~grid_lu.vertical[:,:])) | ((grid.vertical[:,:]) & (~grid_rd.vertical[:,:]) & (grid_lu.vertical[:,:])))
-    
-    for y in range(height):
-        for x in range(width):
-            if (y, x) != end:
-                neighbors = []
-                if y > 0:
-                    neighbors.append(grid_lu.vertical[y - 1, x])
-                if y < height - 1:
-                    neighbors.append(grid_rd.vertical[y, x])
-                if x > 0:
-                    neighbors.append(grid_lu.horizontal[y, x - 1])
-                if x < width - 1:
-                    neighbors.append(grid_rd.horizontal[y, x])
-                solver.ensure(count_true(neighbors) == is_passed[y, x].cond(1, 0))
-    
-    return grid_rd, grid_lu
-
-
+from cspuz import graph, Solver, count_true, BoolGridFrame
+from cspuz.puzzle import util as puz_util
+from util import get_direction_order
 
 def solve_maze1(height, width, blocks, walls_h, walls_v, numbers, start, end):
     solver = Solver()
@@ -64,28 +35,7 @@ def solve_maze1(height, width, blocks, walls_h, walls_v, numbers, start, end):
             neighbors.append(is_passed[y + 1, x + 1])
         solver.ensure(count_true(neighbors) == n)
 
-    order_array = solver.int_array((height, width), -1, height * width - 1)
-    solver.add_answer_key(order_array)
-
-    grid_rd, grid_lu = direction(solver, grid, is_passed, height, width, start, end)
-
-    for y in range(height):
-        for x in range(width):
-            if (y, x) == start:
-                solver.ensure(order_array[y, x] == 0)
-            elif (y, x) != end:
-                solver.ensure((~is_passed[y, x]).then(order_array[y, x] == -1))
-    
-    for y in range(height - 1):
-        for x in range(width):
-            solver.ensure(grid_rd.vertical[y, x].then(order_array[y + 1, x] - order_array[y, x] == 1))
-            solver.ensure(grid_lu.vertical[y, x].then(order_array[y, x] - order_array[y + 1, x] == 1))
-    
-    for y in range(height):
-        for x in range(width - 1):
-            solver.ensure(grid_rd.horizontal[y, x].then(order_array[y, x + 1] - order_array[y, x] == 1))
-            solver.ensure(grid_lu.horizontal[y, x].then(order_array[y, x] - order_array[y, x + 1] == 1))
-    
+    grid_rd, grid_lu, order_array = get_direction_order(solver, grid, is_passed, height, width, start, end)
     is_sat = solver.solve()
     return is_sat, grid, order_array
 
@@ -102,9 +52,9 @@ def _main1():
     print("maze 1:", is_sat)
     if is_sat:
         print("grid:")
-        print(util.stringify_grid_frame(grid))
+        print(puz_util.stringify_grid_frame(grid))
         print("order_array:")
-        print(util.stringify_array(order_array, lambda x: "XXX" if x == -1 else "???" if x == None else str(x).zfill(3)))
+        print(puz_util.stringify_array(order_array, lambda x: "XXX" if x == -1 else "???" if x == None else str(x).zfill(3)))
 
 
 

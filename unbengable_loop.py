@@ -1,6 +1,7 @@
 from cspuz import Solver, BoolGridFrame, graph
 from cspuz.constraints import count_true, fold_or, fold_and
 from cspuz.puzzle import util
+from util import get_pathlength
 
 def solve_unbengable_loop(L, regions):
     solver = Solver()
@@ -30,28 +31,8 @@ def solve_unbengable_loop(L, regions):
     solver.ensure(~(is_black[:-1, :-1] & is_black[1:, 1:]))
     solver.ensure(~(is_black[:-1, 1:] & is_black[1:, :-1]))
 
-    to_up = solver.int_array((L, L), 0, L - 1)
-    to_down = solver.int_array((L, L), 0, L - 1)
-    to_left = solver.int_array((L, L), 0, L - 1)
-    to_right = solver.int_array((L, L), 0, L - 1)
-    for y in range(L):
-        for x in range(L):
-            if y == 0:
-                solver.ensure(to_up[y, x] == 0)
-            else:
-                solver.ensure(to_up[y, x] == (grid[y * 2 - 1, x * 2].cond(to_up[y - 1, x] + 1, 0)))
-            if y == L - 1:
-                solver.ensure(to_down[y, x] == 0)
-            else:
-                solver.ensure(to_down[y, x] == (grid[y * 2 + 1, x * 2].cond(to_down[y + 1, x] + 1, 0)))
-            if x == 0:
-                solver.ensure(to_left[y, x] == 0)
-            else:
-                solver.ensure(to_left[y, x] == (grid[y * 2, x * 2 - 1].cond(to_left[y, x - 1] + 1, 0)))
-            if x == L - 1:
-                solver.ensure(to_right[y, x] == 0)
-            else:
-                solver.ensure(to_right[y, x] == (grid[y * 2, x * 2 + 1].cond(to_right[y, x + 1] + 1, 0)))
+    to_up, to_down, to_left, to_right = get_pathlength(solver, grid, L, L)
+
     for y in range(L):
         for x in range(L):
             solver.ensure((~is_white[y, x]) | (((to_up[y, x] == 1) & (to_down[y, x] >= 1)) | ((to_up[y, x] >= 1) & (to_down[y, x] == 1)) \

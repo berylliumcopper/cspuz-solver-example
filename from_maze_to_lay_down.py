@@ -131,11 +131,12 @@ def solve_maze3(height, width, walls_h, walls_v, blacks, reds, whites, letters, 
     for y in range(height):
         for x in range(width):
             solver.ensure(is_passed[y, x])
+    solver.ensure(count_true(grid.vertex_neighbors(start)) == 1)
+    solver.ensure(count_true(grid.vertex_neighbors(end)) == 1)
 
     grid_rd, grid_lu, order_array = get_direction_order(solver, grid, is_passed, height, width, start, end)
 
     for y, x in blacks:
-        position = order_array[y, x]
         name = "BLACK"
         moves = solver.int_array(len(name), 0, 3)
         curr_y, curr_x = y, x
@@ -147,7 +148,6 @@ def solve_maze3(height, width, walls_h, walls_v, blacks, reds, whites, letters, 
             solver.ensure(fold_or(conditions))
     
     for y, x in reds:
-        position = order_array[y, x]
         name = "RED"
         moves = solver.int_array(len(name), 0, 3)
         curr_y, curr_x = y, x
@@ -159,7 +159,6 @@ def solve_maze3(height, width, walls_h, walls_v, blacks, reds, whites, letters, 
             solver.ensure(fold_or(conditions))
 
     for y, x in whites:
-        position = order_array[y, x]
         name = "WHITE"
         moves = solver.int_array(len(name), 0, 3)
         curr_y, curr_x = y, x
@@ -193,5 +192,90 @@ def _main3():
         print(puz_util.stringify_array(order_array, lambda x: "XXX" if x == -1 else "???" if x == None else str(x).zfill(3)))
 
 
+def solve_maze4(height, width, blocks, walls_h, walls_v, numbers, arrows, keys, locks, start, end):
+    solver = Solver()
+    grid = BoolGridFrame(solver, height - 1, width - 1)
+    solver.add_answer_key(grid)
+    is_passed = graph.active_edges_single_path(solver, grid)
+    for y, x in blocks:
+        solver.ensure(~is_passed[y, x])
+    for y, x in walls_h:
+        solver.ensure(~grid.horizontal[y, x])
+    for y, x in walls_v:
+        solver.ensure(~grid.vertical[y, x])
+    solver.ensure(count_true(grid.vertex_neighbors(start)) == 1)
+    solver.ensure(count_true(grid.vertex_neighbors(end)) == 1)
+    
+    for y, x, n in numbers:
+        neighbors = []
+        if y > 0:
+            neighbors.append(is_passed[y - 1, x])
+        if y < height - 1:
+            neighbors.append(is_passed[y + 1, x])
+        if x > 0:
+            neighbors.append(is_passed[y, x - 1])
+        if x < width - 1:
+            neighbors.append(is_passed[y, x + 1])
+        if y > 0 and x > 0:
+            neighbors.append(is_passed[y - 1, x - 1])
+        if y > 0 and x < width - 1:
+            neighbors.append(is_passed[y - 1, x + 1])
+        if y < height - 1 and x > 0:
+            neighbors.append(is_passed[y + 1, x - 1])
+        if y < height - 1 and x < width - 1:
+            neighbors.append(is_passed[y + 1, x + 1])
+        solver.ensure(count_true(neighbors) == n)
+
+    grid_rd, grid_lu, order_array = get_direction_order(solver, grid, is_passed, height, width, start, end)
+
+    for y, x in arrows["l"]:
+        solver.ensure(grid_lu.horizontal[y, x] & grid_lu.horizontal[y, x-1])
+    for y, x in arrows["r"]:
+        solver.ensure(grid_rd.horizontal[y, x] & grid_rd.horizontal[y, x-1])
+    for y, x in arrows["u"]:
+        solver.ensure(grid_lu.vertical[y, x] & grid_lu.vertical[y-1, x])
+    for y, x in arrows["d"]:
+        solver.ensure(grid_rd.vertical[y, x] & grid_rd.vertical[y-1, x])
+    for y, x in arrows["h"]:
+        solver.ensure((grid_lu.horizontal[y, x] & grid_lu.horizontal[y, x-1]) | (grid_rd.horizontal[y, x] & grid_rd.horizontal[y, x-1]))
+    for y, x in arrows["v"]:
+        solver.ensure((grid_lu.vertical[y, x] & grid_lu.vertical[y-1, x]) | (grid_rd.vertical[y, x] & grid_rd.vertical[y-1, x]))
+
+    index_array = solver.int_array((len(keys) + len(locks), 1), 0, height * width - 1)
+    solver.add_answer_key(index_array)
+    for i in range(len(keys) + len(locks) - 1):
+        solver.ensure(index_array[i] < index_array[i+1])
+
+    for y, x in keys:
+        solver.ensure(is_passed[y, x])
+        solver.ensure(fold_or([index_array[2*i, 0] == order_array[y, x] for i in range(len(keys))]))
+    for y, x in locks:
+        solver.ensure(is_passed[y, x])
+        solver.ensure(fold_or([index_array[2*i+1, 0] == order_array[y, x] for i in range(len(locks))]))
+
+    is_sat = solver.solve()
+    return is_sat, grid, order_array
+
+def _main4():
+    height = 14
+    width = 14
+    blocks = [(2, 3), (3, 10), (5, 2), (7, 7), (8, 2), (8, 4), (10, 2), (10, 4), (12, 2), (12, 4), (4, 10), (9, 12), (10, 3), (10, 12), (12, 0)]
+    walls_h = [(4, 3), (10, 0), (12, 0)]
+    walls_v = [(4, 4), (7, 0)]
+    numbers = [(7, 12, 8), (8, 1, 6), (8, 3, 6), (8, 12, 7), (12, 3, 6)]
+    arrows = {"l": [(2, 1), (6, 6), (7, 2)], "r": [(0, 7), (4, 2), (5, 8), (6, 1), (9, 4)], "u": [(1, 4), (1, 6), (4, 11), (8, 8), (9, 9), (9, 11)], "d": [(9, 7), (10, 6)], "h": [(0, 1), (1, 1), (8, 6), (11, 4), (12, 6), (12, 8), (13, 6)], "v": [(6, 11), (7, 5), (12, 12)]}
+    keys = [(6, 10), (8, 9), (9, 0), (12, 11)]
+    locks = [(6, 9), (9, 2), (10, 11), (13, 11)]
+    start = (3, 9)
+    end = (11, 12)
+    is_sat, grid, order_array = solve_maze4(height, width, blocks, walls_h, walls_v, numbers, arrows, keys, locks, start, end)
+    print("maze 4:", is_sat)
+    if is_sat:
+        print("grid:")
+        print(puz_util.stringify_grid_frame(grid))
+        print("order_array:")
+        print(puz_util.stringify_array(order_array, lambda x: "XXX" if x == -1 else "???" if x == None else str(x).zfill(3)))
+
+
 if __name__ == "__main__":
-    _main3()
+    _main4()

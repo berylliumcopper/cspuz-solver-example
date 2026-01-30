@@ -1,4 +1,4 @@
-This project is built on the basis of cspuz library by semiexp. https://github.com/semiexp/cspuz
+This project is built on the basis of cspuz library by semiexp, which is open source unper MIT license. https://github.com/semiexp/cspuz
 
 I want to provide more examples of cspuz code for solving pencil/paper puzzles, especially those with modified or combined rules. It might be hard to code the rules into the language of cspuz library upon first sight.
 

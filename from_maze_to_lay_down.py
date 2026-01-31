@@ -1,7 +1,9 @@
 from cspuz import graph, Solver, count_true, BoolGridFrame
 from cspuz.puzzle import util as puz_util
 from util import get_direction_order, get_pathlength
-from cspuz.constraints import fold_or
+from cspuz.array import BoolArray1D, IntArray1D
+from typing import Tuple
+from cspuz.constraints import count_true, fold_or
 
 def solve_maze1(height, width, blocks, walls_h, walls_v, numbers, start, end):
     solver = Solver()
@@ -409,5 +411,366 @@ def _main5():
         print(puz_util.stringify_array(order_array, lambda x: "XXX" if x == -1 else "???" if x == None else str(x).zfill(3)))
 
 
+class DiceGrid:
+    def __init__(self, solver, depth, height, width):
+        self.depth = depth
+        self.height = height
+        self.width = width
+        
+        # Surfaces (vertices/cells)
+        self.dims = [
+        (height, width),  # 0
+        (height, depth),  # 1
+        (height, width),  # 2
+        (depth, width),   # 3
+        (depth, height),  # 4
+        (depth, width)    # 5
+        ]
+        
+        # Mapping (surface_index, y, x) to vertex index
+        self.offsets = [0]
+        for s in self.dims:
+            self.offsets.append(self.offsets[-1] + s[0] * s[1])
+        
+        num_vertices = self.offsets[-1]
+        self.graph = graph.Graph(num_vertices)
+        
+        def get_v(s_idx, y, x):
+            return self.offsets[s_idx] + y * self.dims[s_idx][1] + x
+
+        self.get_v = get_v
+
+        def from_v(v):
+            for s_idx in range(6):
+                if self.offsets[s_idx] <= v < self.offsets[s_idx + 1]:
+                    local_v = v - self.offsets[s_idx]
+                    width = self.dims[s_idx][1]
+                    return s_idx, local_v // width, local_v % width
+            return None
+
+        self.from_v = from_v
+
+        # Internal connectivity
+        for s_idx in range(6):
+            h, w = self.dims[s_idx]
+            for y in range(h):
+                for x in range(w - 1):
+                    self.graph.add_edge(get_v(s_idx, y, x), get_v(s_idx, y, x + 1))
+            for y in range(h - 1):
+                for x in range(w):
+                    self.graph.add_edge(get_v(s_idx, y, x), get_v(s_idx, y + 1, x))
+
+        # Cross-surface connectivity
+        # Surface 0
+        for i in range(height):
+            self.graph.add_edge(get_v(0, i, 0), get_v(4, 0, i))
+            self.graph.add_edge(get_v(0, i, width - 1), get_v(1, i, 0))
+        for i in range(width):
+            self.graph.add_edge(get_v(0, 0, i), get_v(3, 0, width - 1 - i))
+            self.graph.add_edge(get_v(0, height - 1, i), get_v(5, 0, i))
+
+        # Surface 1
+        for i in range(height):
+            self.graph.add_edge(get_v(1, i, depth - 1), get_v(2, i, 0))
+        for i in range(depth):
+            self.graph.add_edge(get_v(1, 0, i), get_v(3, i, 0))
+            self.graph.add_edge(get_v(1, height - 1, i), get_v(5, i, width - 1))
+
+        # Surface 2
+        for i in range(height):
+            self.graph.add_edge(get_v(2, i, width - 1), get_v(4, depth - 1, i))
+        for i in range(width):
+            self.graph.add_edge(get_v(2, 0, i), get_v(3, depth - 1, i))
+            self.graph.add_edge(get_v(2, height - 1, i), get_v(5, depth - 1, width - 1 - i))
+
+        # Surface 3
+        for i in range(depth):
+            self.graph.add_edge(get_v(3, i, width - 1), get_v(4, i, 0))
+
+        # Surface 4
+        for i in range(depth):
+            self.graph.add_edge(get_v(4, i, height - 1), get_v(5, i, 0))
+
+def get_adjacent_dice(depth, height, width, s, y, x):
+    # Returns (s, y, x) for left, right, up, down
+    # Surface dimensions
+    dims = [
+        (height, width),  # 0
+        (height, depth),  # 1
+        (height, width),  # 2
+        (depth, width),   # 3
+        (depth, height),  # 4
+        (depth, width)    # 5
+    ]
+    
+    h, w = dims[s]
+    
+    # Default internal neighbors
+    res = [
+        (s, y, x - 1) if x > 0 else None, # left
+        (s, y, x + 1) if x < w - 1 else None, # right
+        (s, y - 1, x) if y > 0 else None, # up
+        (s, y + 1, x) if y < h - 1 else None  # down
+    ]
+    
+    # Boundary cases
+    if s == 0:
+        if x == 0: res[0] = (4, 0, y) # left -> 4 up
+        if x == width - 1: res[1] = (1, y, 0) # right -> 1 left
+        if y == 0: res[2] = (3, 0, width - 1 - x) # up -> 3 up (flipped)
+        if y == height - 1: res[3] = (5, 0, x) # down -> 5 up
+    elif s == 1:
+        if x == 0: res[0] = (0, y, width - 1) # left -> 0 right
+        if x == depth - 1: res[1] = (2, y, 0) # right -> 2 left
+        if y == 0: res[2] = (3, x, 0) # up -> 3 left
+        if y == height - 1: res[3] = (5, x, width - 1) # down -> 5 right
+    elif s == 2:
+        if x == 0: res[0] = (1, y, depth - 1) # left -> 1 right
+        if x == width - 1: res[1] = (4, depth - 1, y) # right -> 4 down
+        if y == 0: res[2] = (3, depth - 1, x) # up -> 3 down
+        if y == height - 1: res[3] = (5, depth - 1, width - 1 - x) # down -> 5 down (flipped)
+    elif s == 3:
+        if x == 0: res[0] = (1, 0, y) # left -> 1 up
+        if x == width - 1: res[1] = (4, y, 0) # right -> 4 left
+        if y == 0: res[2] = (0, 0, width - 1 - x) # up -> 0 up (flipped)
+        if y == depth - 1: res[3] = (2, 0, x) # down -> 2 up
+    elif s == 4:
+        if x == 0: res[0] = (3, y, width - 1) # left -> 3 right
+        if x == height - 1: res[1] = (5, y, 0) # right -> 5 left
+        if y == 0: res[2] = (0, x, 0) # up -> 0 left
+        if y == depth - 1: res[3] = (2, x, width - 1) # down -> 2 right
+    elif s == 5:
+        if x == 0: res[0] = (4, y, height - 1) # left -> 4 right
+        if x == width - 1: res[1] = (1, height - 1, y) # right -> 1 down
+        if y == 0: res[2] = (0, height - 1, x) # up -> 0 down
+        if y == depth - 1: res[3] = (2, height - 1, width - 1 - x) # down -> 2 down (flipped)
+        
+    return res
+
+def active_edges_single_path_dice(solver: Solver, dice_grid: DiceGrid):
+    active_edges = solver.bool_array(len(dice_grid.graph.edges))
+    is_passed_flat = graph.active_edges_single_path(solver, active_edges, dice_grid.graph)
+    return active_edges, is_passed_flat
+
+def get_edge_var(dice_grid, active_edges, u, v):
+    for neighbor, edge_id in dice_grid.graph.incident_edges[u]:
+        if neighbor == v:
+            return active_edges[edge_id]
+    return None
+
+def get_v(dice_grid, s_idx, y, x):
+    return dice_grid.offsets[s_idx] + y * dice_grid.dims[s_idx][1] + x
+
+def get_pathlength_dice(solver: Solver, dice_grid: DiceGrid, active_edges):
+    dims = dice_grid.dims
+    num_dims = 6
+    max_len = dice_grid.width + dice_grid.height + dice_grid.depth
+    
+    to_up = [solver.int_array(dim, 0, max_len) for dim in dims]
+    to_down = [solver.int_array(dim, 0, max_len) for dim in dims]
+    to_left = [solver.int_array(dim, 0, max_len) for dim in dims]
+    to_right = [solver.int_array(dim, 0, max_len) for dim in dims]
+
+    for s_idx in range(num_dims):
+        h, w = dims[s_idx]
+        for y in range(h):
+            for x in range(w):
+                # Internal propagation
+                # to_up[y, x] depends on the vertical edge above it
+                if y > 0:
+                    edge = get_edge_var(dice_grid, active_edges, get_v(dice_grid, s_idx, y, x), get_v(dice_grid, s_idx, y - 1, x))
+                    solver.ensure(to_up[s_idx][y, x] == (edge.cond(to_up[s_idx][y-1, x] + 1, 0)))
+                # to_down[y, x] depends on the vertical edge below it
+                if y < h - 1:
+                    edge = get_edge_var(dice_grid, active_edges, get_v(dice_grid, s_idx, y, x), get_v(dice_grid, s_idx, y + 1, x))
+                    solver.ensure(to_down[s_idx][y, x] == (edge.cond(to_down[s_idx][y+1, x] + 1, 0)))
+                # to_left[y, x] depends on the horizontal edge to its left
+                if x > 0:
+                    edge = get_edge_var(dice_grid, active_edges, get_v(dice_grid, s_idx, y, x), get_v(dice_grid, s_idx, y, x - 1))
+                    solver.ensure(to_left[s_idx][y, x] == (edge.cond(to_left[s_idx][y, x-1] + 1, 0)))
+                # to_right[y, x] depends on the horizontal edge to its right
+                if x < w - 1:
+                    edge = get_edge_var(dice_grid, active_edges, get_v(dice_grid, s_idx, y, x), get_v(dice_grid, s_idx, y, x + 1))
+                    solver.ensure(to_right[s_idx][y, x] == (edge.cond(to_right[s_idx][y, x+1] + 1, 0)))
+
+    # Boundary propagation: when a path crosses a boundary, the count continues
+    # in the direction perpendicular to the boundary.
+    
+    # Surface 0
+    for i in range(dice_grid.height):
+        # Left (x=0) boundary connects to Surface 4 Up (y=0)
+        edge_0_4 = get_edge_var(dice_grid, active_edges, get_v(dice_grid, 0, i, 0), get_v(dice_grid, 4, 0, i))
+        solver.ensure(to_left[0][i, 0] == edge_0_4.cond(to_down[4][0, i] + 1, 0))
+        solver.ensure(to_up[4][0, i] == edge_0_4.cond(to_right[0][i, 0] + 1, 0))
+        
+        # Right (x=width-1) boundary connects to Surface 1 Left (x=0)
+        edge_0_1 = get_edge_var(dice_grid, active_edges, get_v(dice_grid, 0, i, dice_grid.width - 1), get_v(dice_grid, 1, i, 0))
+        solver.ensure(to_right[0][i, dice_grid.width-1] == edge_0_1.cond(to_right[1][i, 0] + 1, 0))
+        solver.ensure(to_left[1][i, 0] == edge_0_1.cond(to_left[0][i, dice_grid.width-1] + 1, 0))
+        
+    for i in range(dice_grid.width):
+        # Up (y=0) boundary connects to Surface 3 Up (y=0) (flipped)
+        edge_0_3 = get_edge_var(dice_grid, active_edges, get_v(dice_grid, 0, 0, i), get_v(dice_grid, 3, 0, dice_grid.width - 1 - i))
+        solver.ensure(to_up[0][0, i] == edge_0_3.cond(to_down[3][0, dice_grid.width-1-i] + 1, 0))
+        solver.ensure(to_up[3][0, dice_grid.width-1-i] == edge_0_3.cond(to_down[0][0, i] + 1, 0))
+        
+        # Down (y=height-1) boundary connects to Surface 5 Up (y=0)
+        edge_0_5 = get_edge_var(dice_grid, active_edges, get_v(dice_grid, 0, dice_grid.height - 1, i), get_v(dice_grid, 5, 0, i))
+        solver.ensure(to_down[0][dice_grid.height-1, i] == edge_0_5.cond(to_down[5][0, i] + 1, 0))
+        solver.ensure(to_up[5][0, i] == edge_0_5.cond(to_up[0][dice_grid.height-1, i] + 1, 0))
+
+    # Surface 1
+    for i in range(dice_grid.height):
+        # Right (x=depth-1) boundary connects to Surface 2 Left (x=0)
+        edge_1_2 = get_edge_var(dice_grid, active_edges, get_v(dice_grid, 1, i, dice_grid.depth - 1), get_v(dice_grid, 2, i, 0))
+        solver.ensure(to_right[1][i, dice_grid.depth-1] == edge_1_2.cond(to_right[2][i, 0] + 1, 0))
+        solver.ensure(to_left[2][i, 0] == edge_1_2.cond(to_left[1][i, dice_grid.depth-1] + 1, 0))
+        
+    for i in range(dice_grid.depth):
+        # Up (y=0) boundary connects to Surface 3 Left (x=0)
+        edge_1_3 = get_edge_var(dice_grid, active_edges, get_v(dice_grid, 1, 0, i), get_v(dice_grid, 3, i, 0))
+        solver.ensure(to_up[1][0, i] == edge_1_3.cond(to_right[3][i, 0] + 1, 0))
+        solver.ensure(to_left[3][i, 0] == edge_1_3.cond(to_down[1][0, i] + 1, 0))
+        
+        # Down (y=height-1) boundary connects to Surface 5 Right (x=width-1)
+        edge_1_5 = get_edge_var(dice_grid, active_edges, get_v(dice_grid, 1, dice_grid.height - 1, i), get_v(dice_grid, 5, i, dice_grid.width - 1))
+        solver.ensure(to_down[1][dice_grid.height-1, i] == edge_1_5.cond(to_left[5][i, dice_grid.width-1] + 1, 0))
+        solver.ensure(to_right[5][i, dice_grid.width-1] == edge_1_5.cond(to_up[1][dice_grid.height-1, i] + 1, 0))
+
+    # Surface 2
+    for i in range(dice_grid.height):
+        # Right (x=width-1) boundary connects to Surface 4 Down (y=depth-1)
+        edge_2_4 = get_edge_var(dice_grid, active_edges, get_v(dice_grid, 2, i, dice_grid.width - 1), get_v(dice_grid, 4, dice_grid.depth - 1, i))
+        solver.ensure(to_right[2][i, dice_grid.width-1] == edge_2_4.cond(to_up[4][dice_grid.depth-1, i] + 1, 0))
+        solver.ensure(to_down[4][dice_grid.depth-1, i] == edge_2_4.cond(to_left[2][i, dice_grid.width-1] + 1, 0))
+        
+    for i in range(dice_grid.width):
+        # Up (y=0) boundary connects to Surface 3 Down (y=depth-1)
+        edge_2_3 = get_edge_var(dice_grid, active_edges, get_v(dice_grid, 2, 0, i), get_v(dice_grid, 3, dice_grid.depth - 1, i))
+        solver.ensure(to_up[2][0, i] == edge_2_3.cond(to_up[3][dice_grid.depth-1, i] + 1, 0))
+        solver.ensure(to_down[3][dice_grid.depth-1, i] == edge_2_3.cond(to_down[2][0, i] + 1, 0))
+        
+        # Down (y=height-1) boundary connects to Surface 5 Down (y=depth-1) (flipped)
+        edge_2_5 = get_edge_var(dice_grid, active_edges, get_v(dice_grid, 2, dice_grid.height - 1, i), get_v(dice_grid, 5, dice_grid.depth - 1, dice_grid.width - 1 - i))
+        solver.ensure(to_down[2][dice_grid.height-1, i] == edge_2_5.cond(to_up[5][dice_grid.depth-1, dice_grid.width-1-i] + 1, 0))
+        solver.ensure(to_down[5][dice_grid.depth-1, dice_grid.width-1-i] == edge_2_5.cond(to_up[2][dice_grid.height-1, i] + 1, 0))
+
+    # Surface 3
+    for i in range(dice_grid.depth):
+        # Right (x=width-1) boundary connects to Surface 4 Left (x=0)
+        edge_3_4 = get_edge_var(dice_grid, active_edges, get_v(dice_grid, 3, i, dice_grid.width - 1), get_v(dice_grid, 4, i, 0))
+        solver.ensure(to_right[3][i, dice_grid.width-1] == edge_3_4.cond(to_right[4][i, 0] + 1, 0))
+        solver.ensure(to_left[4][i, 0] == edge_3_4.cond(to_left[3][i, dice_grid.width-1] + 1, 0))
+
+    # Surface 4
+    for i in range(dice_grid.depth):
+        # Right (x=height-1) boundary connects to Surface 5 Left (x=0)
+        edge_4_5 = get_edge_var(dice_grid, active_edges, get_v(dice_grid, 4, i, dice_grid.height - 1), get_v(dice_grid, 5, i, 0))
+        solver.ensure(to_right[4][i, dice_grid.height-1] == edge_4_5.cond(to_right[5][i, 0] + 1, 0))
+        solver.ensure(to_left[5][i, 0] == edge_4_5.cond(to_left[4][i, dice_grid.height-1] + 1, 0))
+
+    return to_up, to_down, to_left, to_right
+
+def get_neighbor_order(dice_grid: DiceGrid, grid_g: BoolArray1D, grid_l: BoolArray1D, order_array: IntArray1D, s: int, y: int, x: int) -> BoolArray1D:
+    neighbor_edges = dice_grid.graph.incident_edges[get_v(dice_grid, s, y, x)]
+    neighbor_order = []
+    own = get_v(dice_grid, s, y, x)
+    for neighbor, edge_id in neighbor_edges:
+        neighbor_s, neighbor_y, neighbor_x = dice_grid.from_v(neighbor)
+        if neighbor > own:
+            neighbor_order.append(grid_g[edge_id] & (order_array[neighbor_s][neighbor_y, neighbor_x] == order_array[s][y, x] + 1))
+        else:
+            neighbor_order.append(grid_l[edge_id] & (order_array[neighbor_s][neighbor_y, neighbor_x] == order_array[s][y, x] + 1))
+    return BoolArray1D(neighbor_order)
+
+def get_direction_order_dice(solver: Solver, dice_grid: DiceGrid, active_edges: BoolArray1D, is_passed_flat: BoolArray1D, start: Tuple[int, int, int], end: Tuple[int, int, int]) -> Tuple[BoolArray1D, BoolArray1D, IntArray1D]:
+    grid_g = solver.bool_array(len(dice_grid.graph.edges))
+    grid_l = solver.bool_array(len(dice_grid.graph.edges))
+    solver.add_answer_key(grid_g)
+    solver.add_answer_key(grid_l)
+    solver.ensure(((~active_edges) & (~grid_g) & (~grid_l)) | ((active_edges) & (grid_g) & (~grid_l)) | ((active_edges) & (~grid_g) & (grid_l)))
+
+    n_max = 2*dice_grid.width*dice_grid.height + 2*dice_grid.depth*dice_grid.width + 2*dice_grid.height*dice_grid.depth
+    order_array = [solver.int_array((dice_grid.dims[s][0], dice_grid.dims[s][1]), -1, n_max) for s in range(6)]
+    solver.add_answer_key(order_array)
+
+    for s in range(6):
+        for y in range(order_array[s].shape[0]):
+            for x in range(order_array[s].shape[1]):
+                if (s, y, x) != start and (s, y, x) != end:
+                    solver.ensure((is_passed_flat[get_v(dice_grid, s, y, x)]).then(order_array[s][y, x] > 0))
+                    solver.ensure((~is_passed_flat[get_v(dice_grid, s, y, x)]).then(order_array[s][y, x] == -1))
+                    solver.ensure((is_passed_flat[get_v(dice_grid, s, y, x)]).then(count_true(get_neighbor_order(dice_grid, grid_g, grid_l, order_array, s, y, x)) == 1))
+                elif (s, y, x) == start:
+                    print(s, y, x)
+                    solver.ensure(order_array[s][y, x] == 0)
+                    solver.ensure(count_true(get_neighbor_order(dice_grid, grid_g, grid_l, order_array, s, y, x)) == 1)
+
+    return grid_g, grid_l, order_array
+
+def solve_dice(height, width, depth, blocks, start, end, arrows):
+    solver = Solver()
+    dice_grid = DiceGrid(solver, height, width, depth)
+
+    active_edges, is_passed_flat = active_edges_single_path_dice(solver, dice_grid)
+    grid_g, grid_l, order_array = get_direction_order_dice(solver, dice_grid, active_edges, is_passed_flat, start, end)
+    to_up, to_down, to_left, to_right = get_pathlength_dice(solver, dice_grid, active_edges)
+    solver.add_answer_key(active_edges)
+    solver.add_answer_key(is_passed_flat)
+
+    for s, y, x in blocks:
+        solver.ensure(~is_passed_flat[get_v(dice_grid, s, y, x)])
+    
+    start_edges = dice_grid.graph.incident_edges[get_v(dice_grid, start[0], start[1], start[2])]
+    start_count = []
+    for neighbor, edge_id in start_edges:
+        start_count.append(active_edges[edge_id])
+    solver.ensure(count_true(start_count) == 1)
+    end_edges = dice_grid.graph.incident_edges[get_v(dice_grid, end[0], end[1], end[2])]
+    end_count = []
+    for neighbor, edge_id in end_edges:
+        end_count.append(active_edges[edge_id])
+    solver.ensure(count_true(end_count) == 1)
+    
+    for s, y, x in blocks:
+        solver.ensure(~is_passed_flat[get_v(dice_grid, s, y, x)])
+
+    for s, y, x in arrows["r"]:
+        left, right, up, down = get_adjacent_dice(dice_grid.height, dice_grid.width, dice_grid.depth, s, y, x)
+        if get_v(dice_grid, right[0], right[1], right[2]) > get_v(dice_grid, s, y, x):
+            solver.ensure(get_edge_var(dice_grid, grid_g, get_v(dice_grid, s, y, x), get_v(dice_grid, right[0], right[1], right[2])))
+        else:
+            solver.ensure(get_edge_var(dice_grid, grid_l, get_v(dice_grid, s, y, x), get_v(dice_grid, right[0], right[1], right[2])))
+        if get_v(dice_grid, left[0], left[1], left[2]) < get_v(dice_grid, s, y, x):
+            solver.ensure(get_edge_var(dice_grid, grid_g, get_v(dice_grid, s, y, x), get_v(dice_grid, left[0], left[1], left[2])))
+        else:
+            solver.ensure(get_edge_var(dice_grid, grid_l, get_v(dice_grid, s, y, x), get_v(dice_grid, left[0], left[1], left[2])))
+    
+    
+    is_sat = solver.solve()
+    return is_sat, is_passed_flat, order_array
+
+def _main_dice():
+    height = 4
+    width = 4
+    depth = 4
+    start = (0, 1, 1)
+    end = (1, 1, 1)
+    blocks = []
+    for s in range(6):
+        for y in range(4):
+            for x in range(4):
+                if s != 0 and s != 1:
+                    blocks.append((s, y, x))
+    print(blocks)
+    arrows = {"r": [(0, 1, 2), (0, 1, 3), (1, 1, 0)], "l": [], "u": [], "d": []}
+    is_sat, is_passed_flat, order_array = solve_dice(height, width, depth, blocks, start, end, arrows)
+    print(is_sat)
+    if is_sat:
+        print("dice_grid:")
+        for s in range(6):
+            print(f"surface {s}:")
+            print(puz_util.stringify_array(order_array[s], lambda x: "XXX" if x == -1 else "???" if x == None else str(x).zfill(3)))
+
 if __name__ == "__main__":
-    _main5()
+    _main_dice()

@@ -702,13 +702,12 @@ def get_direction_order_dice(solver: Solver, dice_grid: DiceGrid, active_edges: 
                     solver.ensure((~is_passed_flat[get_v(dice_grid, s, y, x)]).then(order_array[s][y, x] == -1))
                     solver.ensure((is_passed_flat[get_v(dice_grid, s, y, x)]).then(count_true(get_neighbor_order(dice_grid, grid_g, grid_l, order_array, s, y, x)) == 1))
                 elif (s, y, x) == start:
-                    print(s, y, x)
                     solver.ensure(order_array[s][y, x] == 0)
                     solver.ensure(count_true(get_neighbor_order(dice_grid, grid_g, grid_l, order_array, s, y, x)) == 1)
 
     return grid_g, grid_l, order_array
 
-def solve_dice(height, width, depth, blocks, start, end, arrows):
+def solve_dice(height, width, depth, blocks, walls_h, walls_v, numbers, walls_edge, reds, letters, arrows, keys, locks, start, end):
     solver = Solver()
     dice_grid = DiceGrid(solver, height, width, depth)
 
@@ -721,6 +720,69 @@ def solve_dice(height, width, depth, blocks, start, end, arrows):
     for s, y, x in blocks:
         solver.ensure(~is_passed_flat[get_v(dice_grid, s, y, x)])
     
+    for s, y, x in walls_h:
+        solver.ensure(~get_edge_var(dice_grid, active_edges, get_v(dice_grid, s, y, x), get_v(dice_grid, s, y, x + 1)))
+    for s, y, x in walls_v:
+        solver.ensure(~get_edge_var(dice_grid, active_edges, get_v(dice_grid, s, y, x), get_v(dice_grid, s, y + 1, x)))
+    for u, v in walls_edge:
+        solver.ensure(~get_edge_var(dice_grid, active_edges, get_v(dice_grid, *u), get_v(dice_grid, *v)))
+
+    for s, y, x, n in numbers:
+        left, right, up, down = get_adjacent_dice(dice_grid.height, dice_grid.width, dice_grid.depth, s, y, x)
+        left_left, left_right, left_up, left_down = get_adjacent_dice(dice_grid.height, dice_grid.width, dice_grid.depth, *left)
+        right_left, right_right, right_up, right_down = get_adjacent_dice(dice_grid.height, dice_grid.width, dice_grid.depth, *right)
+        neighbors = [left, right, up, down, left_up, left_down, right_up, right_down]
+        solver.ensure(count_true([is_passed_flat[get_v(dice_grid, *i)] for i in neighbors]) == n)
+
+    for s, y, x in reds:
+        solver.ensure(is_passed_flat[get_v(dice_grid, s, y, x)])
+        left, right, up, down = get_adjacent_dice(dice_grid.height, dice_grid.width, dice_grid.depth, s, y, x)
+        left_in = get_edge_var(dice_grid, grid_g, get_v(dice_grid, s, y, x), get_v(dice_grid, *left)) if (get_v(dice_grid, *left) > get_v(dice_grid, s, y, x)) else get_edge_var(dice_grid, grid_l, get_v(dice_grid, s, y, x), get_v(dice_grid, *left))
+        right_in = get_edge_var(dice_grid, grid_g, get_v(dice_grid, s, y, x), get_v(dice_grid, *right)) if (get_v(dice_grid, *right) > get_v(dice_grid, s, y, x)) else get_edge_var(dice_grid, grid_l, get_v(dice_grid, s, y, x), get_v(dice_grid, *right))
+        up_in = get_edge_var(dice_grid, grid_g, get_v(dice_grid, s, y, x), get_v(dice_grid, *up)) if (get_v(dice_grid, *up) > get_v(dice_grid, s, y, x)) else get_edge_var(dice_grid, grid_l, get_v(dice_grid, s, y, x), get_v(dice_grid, *up))
+        down_in = get_edge_var(dice_grid, grid_g, get_v(dice_grid, s, y, x), get_v(dice_grid, *down)) if (get_v(dice_grid, *down) > get_v(dice_grid, s, y, x)) else get_edge_var(dice_grid, grid_l, get_v(dice_grid, s, y, x), get_v(dice_grid, *down))
+        left_out = get_edge_var(dice_grid, grid_l, get_v(dice_grid, s, y, x), get_v(dice_grid, *left)) if (get_v(dice_grid, *left) > get_v(dice_grid, s, y, x)) else get_edge_var(dice_grid, grid_g, get_v(dice_grid, s, y, x), get_v(dice_grid, *left))
+        right_out = get_edge_var(dice_grid, grid_l, get_v(dice_grid, s, y, x), get_v(dice_grid, *right)) if (get_v(dice_grid, *right) > get_v(dice_grid, s, y, x)) else get_edge_var(dice_grid, grid_g, get_v(dice_grid, s, y, x), get_v(dice_grid, *right))
+        up_out = get_edge_var(dice_grid, grid_l, get_v(dice_grid, s, y, x), get_v(dice_grid, *up)) if (get_v(dice_grid, *up) > get_v(dice_grid, s, y, x)) else get_edge_var(dice_grid, grid_g, get_v(dice_grid, s, y, x), get_v(dice_grid, *up))
+        down_out = get_edge_var(dice_grid, grid_l, get_v(dice_grid, s, y, x), get_v(dice_grid, *down)) if (get_v(dice_grid, *down) > get_v(dice_grid, s, y, x)) else get_edge_var(dice_grid, grid_g, get_v(dice_grid, s, y, x), get_v(dice_grid, *down))
+        conditions = []
+        conditions.append(left_in & up_out & (to_left[s][y, x] == to_up[s][y, x] + 2))
+        conditions.append(left_in & down_out & (to_left[s][y, x] == to_down[s][y, x] + 2))
+        conditions.append(right_in & up_out & (to_right[s][y, x] == to_up[s][y, x] + 2))
+        conditions.append(right_in & down_out & (to_right[s][y, x] == to_down[s][y, x] + 2))
+        conditions.append(up_in & left_out & (to_up[s][y, x] == to_left[s][y, x] + 2))
+        conditions.append(up_in & right_out & (to_up[s][y, x] == to_right[s][y, x] + 2))
+        conditions.append(down_in & left_out & (to_down[s][y, x] == to_left[s][y, x] + 2))
+        conditions.append(down_in & right_out & (to_down[s][y, x] == to_right[s][y, x] + 2))
+        solver.ensure(fold_or(conditions))
+
+    for s, y, x in reds:
+        words = []
+        for i in range(4):
+            one_word = []
+            curr_s, curr_y, curr_x = s, y, x
+            for t in range(3):
+                curr_s, curr_y, curr_x = get_adjacent_dice(dice_grid.height, dice_grid.width, dice_grid.depth, curr_s, curr_y, curr_x)[i]
+                one_word.append((curr_s, curr_y, curr_x))
+            words.append(one_word)
+        step_1 = [get_edge_var(dice_grid, grid_g, get_v(dice_grid, s, y, x), get_v(dice_grid, *words[i][0])) if (get_v(dice_grid, *words[i][0]) > get_v(dice_grid, s, y, x)) else get_edge_var(dice_grid, grid_l, get_v(dice_grid, s, y, x), get_v(dice_grid, *words[i][0])) for i in range(len(words))]
+        step_2 = [get_edge_var(dice_grid, grid_g, get_v(dice_grid, *words[i][0]), get_v(dice_grid, *words[i][1])) if (get_v(dice_grid, *words[i][1]) > get_v(dice_grid, *words[i][0])) else get_edge_var(dice_grid, grid_l, get_v(dice_grid, *words[i][0]), get_v(dice_grid, *words[i][1])) for i in range(len(words))]
+        step_3 = [get_edge_var(dice_grid, grid_g, get_v(dice_grid, *words[i][1]), get_v(dice_grid, *words[i][2])) if (get_v(dice_grid, *words[i][2]) > get_v(dice_grid, *words[i][1])) else get_edge_var(dice_grid, grid_l, get_v(dice_grid, *words[i][1]), get_v(dice_grid, *words[i][2])) for i in range(len(words))]
+        solver.ensure(fold_or([fold_or([words[i][0] == k for k in letters["R"]]) & fold_or([words[i][1] == k for k in letters["E"]]) & fold_or([words[i][2] == k for k in letters["D"]]) & (step_1[i]) & (step_2[i]) & (step_3[i]) for i in range(len(words))]))
+
+
+    index_array = solver.int_array((len(keys) + len(locks), 1), 0, 2 * height * width + 2 * height * depth + 2 * width * depth - 1)
+    solver.add_answer_key(index_array)
+    for i in range(len(keys) + len(locks) - 1):
+        solver.ensure(index_array[i] < index_array[i+1])
+
+    for s, y, x in keys:
+        solver.ensure(is_passed_flat[get_v(dice_grid, s, y, x)])
+        solver.ensure(fold_or([index_array[2*i, 0] == order_array[s][y, x] for i in range(len(keys))]))
+    for s, y, x in locks:
+        solver.ensure(is_passed_flat[get_v(dice_grid, s, y, x)])
+        solver.ensure(fold_or([index_array[2*i+1, 0] == order_array[s][y, x] for i in range(len(locks))]))
+
     start_edges = dice_grid.graph.incident_edges[get_v(dice_grid, start[0], start[1], start[2])]
     start_count = []
     for neighbor, edge_id in start_edges:
@@ -736,36 +798,79 @@ def solve_dice(height, width, depth, blocks, start, end, arrows):
         solver.ensure(~is_passed_flat[get_v(dice_grid, s, y, x)])
 
     for s, y, x in arrows["r"]:
+        solver.ensure(is_passed_flat[get_v(dice_grid, s, y, x)])
         left, right, up, down = get_adjacent_dice(dice_grid.height, dice_grid.width, dice_grid.depth, s, y, x)
-        if get_v(dice_grid, right[0], right[1], right[2]) > get_v(dice_grid, s, y, x):
-            solver.ensure(get_edge_var(dice_grid, grid_g, get_v(dice_grid, s, y, x), get_v(dice_grid, right[0], right[1], right[2])))
+        if get_v(dice_grid, *right) > get_v(dice_grid, s, y, x):
+            solver.ensure(get_edge_var(dice_grid, grid_g, get_v(dice_grid, s, y, x), get_v(dice_grid, *right)))
         else:
-            solver.ensure(get_edge_var(dice_grid, grid_l, get_v(dice_grid, s, y, x), get_v(dice_grid, right[0], right[1], right[2])))
-        if get_v(dice_grid, left[0], left[1], left[2]) < get_v(dice_grid, s, y, x):
-            solver.ensure(get_edge_var(dice_grid, grid_g, get_v(dice_grid, s, y, x), get_v(dice_grid, left[0], left[1], left[2])))
+            solver.ensure(get_edge_var(dice_grid, grid_l, get_v(dice_grid, s, y, x), get_v(dice_grid, *right)))
+        if get_v(dice_grid, *left) < get_v(dice_grid, s, y, x):
+            solver.ensure(get_edge_var(dice_grid, grid_g, get_v(dice_grid, s, y, x), get_v(dice_grid, *left)))
         else:
-            solver.ensure(get_edge_var(dice_grid, grid_l, get_v(dice_grid, s, y, x), get_v(dice_grid, left[0], left[1], left[2])))
-    
-    
+            solver.ensure(get_edge_var(dice_grid, grid_l, get_v(dice_grid, s, y, x), get_v(dice_grid, *left)))
+    for s, y, x in arrows["l"]:
+        solver.ensure(is_passed_flat[get_v(dice_grid, s, y, x)])
+        left, right, up, down = get_adjacent_dice(dice_grid.height, dice_grid.width, dice_grid.depth, s, y, x)
+        if get_v(dice_grid, *left) > get_v(dice_grid, s, y, x):
+            solver.ensure(get_edge_var(dice_grid, grid_g, get_v(dice_grid, s, y, x), get_v(dice_grid, *left)))
+        else:
+            solver.ensure(get_edge_var(dice_grid, grid_l, get_v(dice_grid, s, y, x), get_v(dice_grid, *left)))
+        if get_v(dice_grid, *right) < get_v(dice_grid, s, y, x):
+            solver.ensure(get_edge_var(dice_grid, grid_g, get_v(dice_grid, s, y, x), get_v(dice_grid, *right)))
+        else:
+            solver.ensure(get_edge_var(dice_grid, grid_l, get_v(dice_grid, s, y, x), get_v(dice_grid, *right)))
+    for s, y, x in arrows["u"]:
+        solver.ensure(is_passed_flat[get_v(dice_grid, s, y, x)])
+        left, right, up, down = get_adjacent_dice(dice_grid.height, dice_grid.width, dice_grid.depth, s, y, x)
+        if get_v(dice_grid, *up) > get_v(dice_grid, s, y, x):
+            solver.ensure(get_edge_var(dice_grid, grid_g, get_v(dice_grid, s, y, x), get_v(dice_grid, *up)))
+        else:
+            solver.ensure(get_edge_var(dice_grid, grid_l, get_v(dice_grid, s, y, x), get_v(dice_grid, *up)))
+        if get_v(dice_grid, *down) < get_v(dice_grid, s, y, x):
+            solver.ensure(get_edge_var(dice_grid, grid_g, get_v(dice_grid, s, y, x), get_v(dice_grid, *down)))
+        else:
+            solver.ensure(get_edge_var(dice_grid, grid_l, get_v(dice_grid, s, y, x), get_v(dice_grid, *down)))
+    for s, y, x in arrows["d"]:
+        solver.ensure(is_passed_flat[get_v(dice_grid, s, y, x)])
+        left, right, up, down = get_adjacent_dice(dice_grid.height, dice_grid.width, dice_grid.depth, s, y, x)
+        if get_v(dice_grid, *down) > get_v(dice_grid, s, y, x):
+            solver.ensure(get_edge_var(dice_grid, grid_g, get_v(dice_grid, s, y, x), get_v(dice_grid, *down)))
+        else:
+            solver.ensure(get_edge_var(dice_grid, grid_l, get_v(dice_grid, s, y, x), get_v(dice_grid, *down)))
+        if get_v(dice_grid, *up) < get_v(dice_grid, s, y, x):
+            solver.ensure(get_edge_var(dice_grid, grid_g, get_v(dice_grid, s, y, x), get_v(dice_grid, *up)))
+        else:
+            solver.ensure(get_edge_var(dice_grid, grid_l, get_v(dice_grid, s, y, x), get_v(dice_grid, *up)))
+    for s, y, x in arrows["h"]:
+        solver.ensure(is_passed_flat[get_v(dice_grid, s, y, x)])
+        solver.ensure(to_left[s][y, x] > 0)
+        solver.ensure(to_right[s][y, x] > 0)
+    for s, y, x in arrows["v"]:
+        solver.ensure(is_passed_flat[get_v(dice_grid, s, y, x)])
+        solver.ensure(to_up[s][y, x] > 0)
+        solver.ensure(to_down[s][y, x] > 0)
+
     is_sat = solver.solve()
     return is_sat, is_passed_flat, order_array
 
 def _main_dice():
-    height = 4
-    width = 4
-    depth = 4
-    start = (0, 1, 1)
-    end = (1, 1, 1)
-    blocks = []
-    for s in range(6):
-        for y in range(4):
-            for x in range(4):
-                if s != 0 and s != 1:
-                    blocks.append((s, y, x))
-    print(blocks)
-    arrows = {"r": [(0, 1, 2), (0, 1, 3), (1, 1, 0)], "l": [], "u": [], "d": []}
-    is_sat, is_passed_flat, order_array = solve_dice(height, width, depth, blocks, start, end, arrows)
-    print(is_sat)
+    height = 7
+    width = 7
+    depth = 7
+    start = (4, 0, 5)
+    end = (4, 6, 3)
+    blocks = [(0, 1, 2), (0, 1, 4), (0, 3, 2), (0, 3, 4), (0, 5, 2), (0, 5, 4), (1, 2, 4), (1, 4, 2), (4, 1, 1), (4, 1, 5), (4, 3, 3), (4, 5, 1), (4, 5, 5), (5, 1, 5), (5, 3, 3), (5, 5, 1), (0, 3, 3), (0, 5, 0), (1, 3, 5), (2, 0, 6), (4, 0, 6), (5, 1, 6)]
+    walls_h = [(0, 3, 0), (0, 5, 0), (1, 0, 4), (1, 1, 0), (1, 2, 0), (1, 2, 1), (1, 4, 5), (1, 6, 2), (2, 0, 0), (2, 0, 1), (2, 0, 2), (2, 1, 1), (2, 3, 3), (2, 4, 5), (2, 6, 3), (3, 4, 2), (4, 0, 2), (4, 4, 3), (5, 3, 0), (5, 4, 5), (5, 6, 0), (5, 6, 5)]
+    walls_v = [(0, 0, 0), (1, 0, 1), (1, 1, 2), (1, 1, 6), (1, 5, 1), (1, 5, 4), (1, 5, 5), (1, 5, 6), (2, 0, 1), (2, 1, 1), (2, 3, 4), (2, 4, 0), (2, 4, 1), (2, 4, 3), (2, 4, 5), (3, 0, 3), (3, 2, 0), (3, 2, 1), (3, 4, 0), (3, 4, 1), (3,5, 5), (4, 0, 3), (4, 2, 4), (4, 2, 6), (4, 5, 0), (5, 1, 0), (5, 2, 6), (5, 3, 0)]
+    walls_edge = [((1, 0, 1), (3, 1, 0)), ((1, 0, 2), (3, 2, 0)), ((4, 5, 6), (5, 5, 0)), ((4, 6, 6), (5, 6, 0))]
+    numbers = [(0, 1, 1, 6), (0, 1, 3, 6), (0, 5, 3, 6), (1, 2, 1, 3), (1, 3, 4, 6), (1, 4, 1, 5), (2, 2, 4, 8), (2, 4, 3, 4), (2, 4, 5, 7), (2, 5, 1, 3), (3, 1, 1, 5), (3, 1, 5, 8), (3, 3, 2, 8), (3, 3, 5, 8), (4, 1, 3, 6), (4, 3, 1, 1), (4, 3, 5, 4), (5, 1, 0, 7), (5, 1, 3, 0), (5, 2, 5, 3), (5, 3, 5, 5), (5, 5, 3, 1), (5, 5, 5, 6)]
+    reds = [(2, 3, 3), (3, 2, 2), (3, 2, 4), (3, 4, 2), (3, 4, 4)]
+    letters = {"R": [(0, 4, 6), (0, 5, 5), (0, 6, 3), (1, 1, 1), (1, 2, 2), (1, 5, 5), (2, 1, 1), (2, 2, 3), (2, 6, 1), (3, 1, 2), (3, 1, 4), (3, 2, 1), (3, 2, 5), (3, 4, 1), (3, 5, 2), (3, 5, 4), (4, 2, 4), (5, 4, 5)], "E": [(0, 0, 3), (2, 1, 2), (2, 1, 3), (3, 0, 2), (3, 0, 4), (3, 2, 0) ,(3, 2, 6), (3, 4, 0), (3, 6, 2), (3, 6, 4), (3, 6, 6), (4, 6, 5), (5, 2, 6), (5, 3, 6), (5, 6, 1), (5, 6, 6)], "D": [(0, 0, 4), (0, 4, 0), (0, 4, 5), (0, 6, 5), (1, 0, 0), (1, 0, 5), (1, 4, 4), (2, 0, 2), (2, 0, 3), (2, 0, 4), (3, 6, 5), (4, 0, 2), (4, 2, 0)]}
+    keys = [(0, 2, 0)]
+    locks = [(0, 2, 2)]
+    arrows = {"r": [(0, 2, 4), (1, 6, 6)], "l": [(0, 0, 2)], "u": [], "d": [(0, 3, 6)], "h": [(0, 1, 6), (0, 4, 4), (0, 5, 6), (0, 6, 6)], "v": [(0, 0, 5)]}
+    is_sat, is_passed_flat, order_array = solve_dice(height, width, depth, blocks, walls_h, walls_v, numbers, walls_edge, reds, letters, arrows, keys, locks, start, end)
+    print("maze dice:", is_sat)
     if is_sat:
         print("dice_grid:")
         for s in range(6):
@@ -773,4 +878,17 @@ def _main_dice():
             print(puz_util.stringify_array(order_array[s], lambda x: "XXX" if x == -1 else "???" if x == None else str(x).zfill(3)))
 
 if __name__ == "__main__":
+    print("----------")
+    _main1()
+    print("----------")
+    _main2()
+    print("----------")
+    _main3()
+    print("----------")
+    _main4()
+    print("----------")
+
+    _main5()
+    print("----------")
+
     _main_dice()

@@ -19,7 +19,4 @@ The /cspuz folder contains a slightly modified version of the cspuz library (jus
 - `three_dimensional_country.py`：三维国-CCBC1314（共5道小题） https://archive.cipherpuzzles.com/index.html#/problem?c=ccbc13/problems/CCBC-14/23
 - `knight_tour.py`：Rorschachs River规则23（其中的例子是原题的6*6 example，主要用于测试对于非相邻相连网格的处理，和网格相连规则在路径中切换的处理） https://brokensign.com/puzzle/2025/12/31/rorschachs-river.html
 - `simplepath_order.py`：Rorschachs River规则1（其中的例子是原题的6*6 example，主要用于测试按照网格经过顺序给经过格标号的处理） https://brokensign.com/puzzle/2025/12/31/rorschachs-river.html
-
-计划实现：
-
-- 这迷宫让人烦得只想躺平-P&KU2 https://pnku2.pkupuzzle.art/#/game/miyue/summer_06
+- `from_maze_to_lay_down.py`：这迷宫让人烦得只想躺平-P&KU2（共6个迷宫） https://pnku2.pkupuzzle.art/#/game/miyue/summer_06

@@ -5,7 +5,7 @@ I want to provide more examples of cspuz code for solving pencil/paper puzzles, 
 The /cspuz folder contains a slightly modified version of the cspuz library (just add some utility and output function), and the other python files in the root folder are individual puzzles.
 
 
-本项目基于semiexp的cspuz库。https://github.com/semiexp/cspuz
+本项目基于semiexp的cspuz库（基于MIT协议开源）。https://github.com/semiexp/cspuz
 
 我希望提供一些用cspuz库求解一些变体或组合规则纸笔谜题的例子。对我而言，刚看到这些规则时如何将它们转化成cspuz库可解的形式可能并不显然。
 

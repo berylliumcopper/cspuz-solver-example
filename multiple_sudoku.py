@@ -1,7 +1,5 @@
 from cspuz import graph, Solver, count_true, BoolGridFrame
 from cspuz.puzzle import util as puz_util
-from util import get_direction_order, get_pathlength
-from cspuz.array import BoolArray1D, IntArray1D, IntArray2D
 from cspuz.constraints import count_true, fold_or, alldifferent
 
 def solve_multiple_sudoku(grid, nonogram_l, nonogram_u, n_path):

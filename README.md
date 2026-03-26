@@ -22,3 +22,4 @@ The /cspuz folder contains a slightly modified version of the cspuz library (jus
 - `from_maze_to_lay_down.py`：这迷宫让人烦得只想躺平-P&KU2（共6个迷宫） https://pnku2.pkupuzzle.art/#/game/miyue/summer_06
 - `multiple_sudoku.py`：多重数独-SECO2 https://secopuzzle.com/puzzle/duosudoku
 - `machinery_tower.py`：机关塔-SECO2（第4、6、7、8、11层） https://secopuzzle.com/puzzle/tower 
+- `connection_game.py`：数连游戏-P&KU3上 https://pnku3.pkupuzzle.art/puzzle?key=day3_18

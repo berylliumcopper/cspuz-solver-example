@@ -17,19 +17,29 @@ def solve_connection_game(height, width, up, left, n_lines):
         for y in range(height):
             for x in range(width):
                 solver.ensure(passed[y, x] == (grid[y, x] == i))
-
-    for y in range(height - 1):
+        for y in range(height - 1):
+            for x in range(width):
+                solver.ensure(path[2*y+1, 2*x] == (passed[y, x] & passed[y+1, x]))
         for x in range(width - 1):
-            solver.ensure(~((grid[y, x] == grid[y+1, x]) & (grid[y, x] == grid[y, x+1]) & (grid[y, x] == grid[y+1, x+1])))
+            for y in range(height):
+                solver.ensure(path[2*y, 2*x+1] == (passed[y, x] & passed[y, x+1]))
+        solver.ensure(~(passed[:-1, :-1] & passed[1:, :-1] & passed[:-1, 1:] & passed[1:, 1:]))
+
+        solver.ensure(~(passed[1:-1, :-1] & passed[2:, :-1] & passed[1:-1, 1:] & passed[:-2, :-1]))
+        solver.ensure(~(passed[1:-1, 1:] & passed[2:, 1:] & passed[1:-1, :-1] & passed[:-2, 1:]))
+        solver.ensure(~(passed[:-1, 1:-1] & passed[:-1, 2:] & passed[1:, 1:-1] & passed[:-1, :-2]))
+        solver.ensure(~(passed[1:, 1:-1] & passed[1:, 2:] & passed[:-1, 1:-1] & passed[1:, :-2]))
+
+        
     
     for y in range(height-1):
         for x in range(width):
             solver.ensure(frame[2*y+1, 2*x] == fold_or([paths[i][2*y+1, 2*x] for i in range(n_lines)]))
-            solver.ensure(frame[2*y+1, 2*x] == (grid[y, x] == grid[y+1, x]))
+            #solver.ensure(frame[2*y+1, 2*x] == (grid[y, x] == grid[y+1, x]))
     for x in range(width-1):
         for y in range(height):
             solver.ensure(frame[2*y, 2*x+1] == fold_or([paths[i][2*y, 2*x+1] for i in range(n_lines)]))
-            solver.ensure(frame[2*y, 2*x+1] == (grid[y, x] == grid[y, x+1]))
+            #solver.ensure(frame[2*y, 2*x+1] == (grid[y, x] == grid[y, x+1]))
 
     for x in range(width):
         if len(up[x]) == 0:
@@ -75,6 +85,6 @@ if __name__ == "__main__":
     n_lines = 3
     '''
     is_sat, grid, frame = solve_connection_game(height, width, up, left, n_lines)
-    print(is_sat)
+    print(n_lines, is_sat)
     if is_sat:
         print(util.stringify_grid_frame(frame))
